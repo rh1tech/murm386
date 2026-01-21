@@ -7,7 +7,13 @@
 *.uf2
 *.dis
 *.map
+*.dSYM/
 .depends
 .claude/
 build/
 .DS_Store
+tiny386
+tiny386_nosdl
+tiny386_kvm
+wifikbd
+initnet
