@@ -714,12 +714,19 @@ static void ide_exec_cmd(IDEState *s, int val)
     printf("ide: exec_cmd=0x%02x\n", val);
 #endif
     switch(val) {
+    case WIN_NOP:
+        /* NOP command - do nothing, report success */
+        s->error = 0;
+        s->status = READY_STAT | SEEK_STAT;
+        ide_set_irq(s);
+        break;
     case WIN_IDENTIFY:
         ide_identify(s);
         s->status = READY_STAT | SEEK_STAT | DRQ_STAT;
         ide_transfer_start(s, 512, ide_identify_cb);
         ide_set_irq(s);
         break;
+    case WIN_SEEK:
     case WIN_SPECIFY:
     case WIN_RECAL:
         s->error = 0;
@@ -770,6 +777,48 @@ static void ide_exec_cmd(IDEState *s, int val)
     case WIN_READ_NATIVE_MAX:
         ide_set_sector(s, s->nb_sectors - 1);
         s->status = READY_STAT;
+        ide_set_irq(s);
+        break;
+    case WIN_VERIFY:
+    case WIN_VERIFY_ONCE:
+        /* Verify sectors - just report success without reading */
+        s->error = 0;
+        s->status = READY_STAT | SEEK_STAT;
+        ide_set_irq(s);
+        break;
+    case WIN_DIAGNOSE:
+        /* Drive diagnostics - report success (0x01 = no error) */
+        s->error = 0x01;
+        s->status = READY_STAT | SEEK_STAT;
+        ide_set_irq(s);
+        break;
+    case WIN_FLUSH_CACHE:
+    case WIN_FLUSH_CACHE_EXT:
+        /* Flush command - report success immediately.
+         * Write buffering is handled at the file/OS level. */
+        s->error = 0;
+        s->status = READY_STAT | SEEK_STAT;
+        ide_set_irq(s);
+        break;
+    case WIN_STANDBYNOW1:
+    case WIN_STANDBYNOW2:
+    case WIN_IDLEIMMEDIATE:
+    case WIN_SETIDLE1:
+    case WIN_SETIDLE2:
+    case WIN_SLEEPNOW1:
+    case WIN_SLEEPNOW2:
+    case WIN_CHECKPOWERMODE1:
+    case WIN_CHECKPOWERMODE2:
+        /* Power management - just report success */
+        s->error = 0;
+        s->nsector = 0xFF;  /* Active/Idle for CHECKPOWERMODE */
+        s->status = READY_STAT | SEEK_STAT;
+        ide_set_irq(s);
+        break;
+    case WIN_SETFEATURES:
+        /* Set features - accept any feature setting */
+        s->error = 0;
+        s->status = READY_STAT | SEEK_STAT;
         ide_set_irq(s);
         break;
     default:
