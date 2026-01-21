@@ -498,7 +498,7 @@ static void __isr __time_critical_func(dma_handler_vga)(void) {
     if (current_line >= N_LINES_TOTAL) {
         current_line = 0;
         frame_count++;
-        cursor_blink_state = (frame_count >> 4) & 1;
+        // Note: cursor_blink_state is now set externally via vga_hw_set_cursor_blink()
     }
     
     in_vblank = (current_line >= N_LINES_VISIBLE);
@@ -720,6 +720,10 @@ void vga_hw_set_cursor(int x, int y, int start, int end) {
     cursor_y = y;
     cursor_start = start;
     cursor_end = end;
+}
+
+void vga_hw_set_cursor_blink(int blink_phase) {
+    cursor_blink_state = blink_phase;
 }
 
 void vga_hw_set_vram_offset(uint16_t offset) {

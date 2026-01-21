@@ -63,6 +63,9 @@ void vga_hw_set_mode(int mode);
 // Set cursor position and size for text mode
 void vga_hw_set_cursor(int x, int y, int start, int end);
 
+// Set cursor blink state (1 = visible, 0 = hidden during blink cycle)
+void vga_hw_set_cursor_blink(int blink_phase);
+
 // Set VRAM start offset for scrolling
 void vga_hw_set_vram_offset(uint16_t offset);
 

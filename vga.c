@@ -21,6 +21,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+// Enable Ofast optimization for VGA emulation
+#pragma GCC optimize("Ofast")
+
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -1207,6 +1210,14 @@ void vga_refresh(VGAState *s,
         /* text mode */
         graphic_mode = 1;
     }
+#if 0
+    static int last_mode = -1;
+    if (graphic_mode != last_mode) {
+        printf("VGA mode change: %d -> %d (ar_index=0x%02x gr6=0x%02x)\n",
+               last_mode, graphic_mode, s->ar_index, s->gr[0x06]);
+        last_mode = graphic_mode;
+    }
+#endif
 
     if (graphic_mode != s->graphic_mode) {
         s->graphic_mode = graphic_mode;
@@ -2384,31 +2395,45 @@ static void vga_initmode(VGAState *s)
 // Accessor functions for hardware VGA driver integration
 //=============================================================================
 
+/* Get current VGA mode: 0=blank, 1=text, 2=graphics */
 int vga_get_mode(VGAState *s)
 {
-    if (!s) return 0;
-    return s->graphic_mode;
+    if (!(s->ar_index & 0x20)) {
+        return 0;  // blank
+    } else if (s->gr[0x06] & 1) {
+        return 2;  // graphics
+    } else {
+        return 1;  // text
+    }
 }
 
+/* Get VGA start address (for scrolling) */
 uint16_t vga_get_start_addr(VGAState *s)
 {
-    if (!s) return 0;
-    return s->cr[0x0d] | (s->cr[0x0c] << 8);
+    return (s->cr[0x0c] << 8) | s->cr[0x0d];
 }
 
-void vga_get_cursor(VGAState *s, int *x, int *y, int *start, int *end)
+/* Get VGA panning (horizontal pixel scrolling, 0-7) */
+uint8_t vga_get_panning(VGAState *s)
+{
+    return s->ar[0x13] & 0x0F;
+}
+
+/* Get cursor info for external VGA drivers */
+void vga_get_cursor_info(VGAState *s, int *x, int *y, int *start, int *end, int *visible)
 {
     if (!s) {
         if (x) *x = 0;
         if (y) *y = 0;
         if (start) *start = 0;
         if (end) *end = 0;
+        if (visible) *visible = 0;
         return;
     }
 
     // Get cursor offset from CRT registers (0x0E=high, 0x0F=low)
     uint16_t cursor_pos = (s->cr[0x0e] << 8) | s->cr[0x0f];
-    uint16_t start_addr = s->cr[0x0d] | (s->cr[0x0c] << 8);
+    uint16_t start_addr = (s->cr[0x0c] << 8) | s->cr[0x0d];
     int cursor_offset = cursor_pos - start_addr;  // Relative to visible screen
 
     // Calculate x, y from offset
@@ -2419,55 +2444,118 @@ void vga_get_cursor(VGAState *s, int *x, int *y, int *start, int *end)
     if (y) *y = cursor_offset / width;
     if (start) *start = s->cr[0x0a] & 0x1f;
     if (end) *end = s->cr[0x0b] & 0x1f;
+
+    // Cursor is hidden if start > end or if cursor disable bit is set
+    if (visible) *visible = !((s->cr[0x0a] & 0x20) || ((s->cr[0x0a] & 0x1f) > (s->cr[0x0b] & 0x1f)));
 }
 
+/* Legacy cursor function (for compatibility) */
+void vga_get_cursor(VGAState *s, int *x, int *y, int *start, int *end)
+{
+    vga_get_cursor_info(s, x, y, start, end, NULL);
+}
+
+/* Get pointer to VGA DAC palette (768 bytes: 256 colors × 3 RGB values, each 0-63) */
 const uint8_t *vga_get_palette(VGAState *s)
 {
-    if (!s) return NULL;
     return s->palette;
 }
 
-// Returns the current graphics mode details
-// Returns: bpp (8, 15, 16, 24, 32) or 0 if not in graphics mode
-int vga_get_gfx_mode_info(VGAState *s, int *width, int *height, int *bpp)
+/* Get EGA 16-color palette (applies AC palette register indirection)
+ * Fills palette16 with 16 entries of RGB triplets (48 bytes total)
+ */
+void vga_get_palette16(VGAState *s, uint8_t *palette16)
 {
-    if (!s || s->graphic_mode != 2) {
-        if (width) *width = 0;
-        if (height) *height = 0;
-        if (bpp) *bpp = 0;
-        return 0;
+    for (int i = 0; i < 16; i++) {
+        int v = s->ar[i];
+        if (s->ar[0x10] & 0x80)
+            v = ((s->ar[0x14] & 0xf) << 4) | (v & 0xf);
+        else
+            v = ((s->ar[0x14] & 0xc) << 4) | (v & 0x3f);
+        v = v * 3;
+        palette16[i * 3 + 0] = s->palette[v + 0];  // R
+        palette16[i * 3 + 1] = s->palette[v + 1];  // G
+        palette16[i * 3 + 2] = s->palette[v + 2];  // B
+    }
+}
+
+/* Get detailed graphics mode information for hardware rendering
+ * Returns: 0=text, 1=CGA, 2=EGA planar 16-color, 3=VGA 256-color (mode 13h)
+ * Also fills in width, height if pointers are non-NULL
+ */
+int vga_get_graphics_mode(VGAState *s, int *width, int *height)
+{
+    // Check if display is enabled
+    if (!(s->ar_index & 0x20)) {
+        return 0;  // blank/text
     }
 
-    // Check for VBE mode
-    if (s->vbe_regs[VBE_DISPI_INDEX_ENABLE] & VBE_DISPI_ENABLED) {
-        if (width) *width = s->vbe_regs[VBE_DISPI_INDEX_XRES];
-        if (height) *height = s->vbe_regs[VBE_DISPI_INDEX_YRES];
-        if (bpp) *bpp = s->vbe_regs[VBE_DISPI_INDEX_BPP];
-        return s->vbe_regs[VBE_DISPI_INDEX_BPP];
+    // Check if graphics mode
+    if (!(s->gr[0x06] & 1)) {
+        return 0;  // text mode
     }
 
-    // Standard VGA mode
-    // Mode 13h: 320x200x8bpp
-    // EGA 16-color: 320x200 or 640x200/350/480
+    // Get shift_control to determine graphics mode type
+    int shift_control = (s->gr[0x05] >> 5) & 3;
 
-    // Get shift mode from GR[5]
-    int shift_mode = (s->gr[5] >> 5) & 3;
+    // Calculate dimensions
+    int w = (s->cr[0x01] + 1) * 8;
+    int h = s->cr[0x12] |
+        ((s->cr[0x07] & 0x02) << 7) |
+        ((s->cr[0x07] & 0x40) << 3);
+    h++;
 
-    if (shift_mode == 2) {
-        // Mode 13h (256 color, chain4)
-        if (width) *width = 320;
-        if (height) *height = 200;
-        if (bpp) *bpp = 8;
-        return 8;
+    // Handle double-scan and multi-scan
+    int double_scan = (s->cr[0x09] >> 7);
+    if (shift_control != 1) {
+        int multi_scan = (((s->cr[0x09] & 0x1f) + 1) << double_scan);
+        h = (h + multi_scan - 1) / multi_scan;
+    }
+
+    if (width) *width = w;
+    if (height) *height = h;
+
+    if (shift_control == 0) {
+        // Check for Mode X (256-color planar)
+        // AR10 bit 6 = 1 means 256-color mode
+        if (s->ar[0x10] & 0x40) {
+            return 3; // Treat as VGA 256-color (linear pixels in vga_ram)
+        }
+        return 2;  // EGA planar 16-color
+    } else if (shift_control == 1) {
+        return 1;  // CGA mode
     } else {
-        // EGA/VGA 16-color planar mode
-        int w = (s->cr[0x01] + 1) * 8;
-        int h = s->cr[0x12] | ((s->cr[0x07] & 0x02) << 7) | ((s->cr[0x07] & 0x40) << 3);
-        h = (h + 1);
-
-        if (width) *width = w;
-        if (height) *height = h;
-        if (bpp) *bpp = 4;  // 4-bit (16 colors)
-        return 4;
+        return 3;  // VGA 256-color (mode 13h)
     }
+}
+
+/* Get VGA line offset (bytes per scanline in video memory)
+ * For EGA planar mode, this is the number of uint32_t words per line
+ */
+int vga_get_line_offset(VGAState *s)
+{
+    // cr[0x13] is the line offset in words (2 bytes each)
+    // For planar mode, each "word" is a 32-bit value (4 planes packed)
+    return s->cr[0x13];
+}
+
+/* Get Line Compare register (scanline where video address resets to 0) */
+int vga_get_line_compare(VGAState *s)
+{
+    int lc = s->cr[0x18] |
+             ((s->cr[0x07] & 0x10) << 4) |
+             ((s->cr[0x09] & 0x40) << 3);
+    return lc;
+}
+
+/* Check if VGA is in Vertical Retrace */
+bool vga_in_retrace(VGAState *s)
+{
+    return (s->st01 & ST01_V_RETRACE) != 0;
+}
+
+/* Get cursor blink phase (1 = visible, 0 = hidden during blink) */
+int vga_get_cursor_blink_phase(VGAState *s)
+{
+    return s->cursor_visible_phase;
 }

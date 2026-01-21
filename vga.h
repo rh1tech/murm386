@@ -38,9 +38,16 @@ PCIDevice *vga_pci_init(VGAState *s, PCIBus *bus,
 // Accessor functions for hardware VGA driver integration
 int vga_get_mode(VGAState *s);           // 0=blank, 1=text, 2=graphics
 uint16_t vga_get_start_addr(VGAState *s); // Start address in VGA memory
+uint8_t vga_get_panning(VGAState *s);    // Horizontal pixel panning (0-7)
 void vga_get_cursor(VGAState *s, int *x, int *y, int *start, int *end);
+void vga_get_cursor_info(VGAState *s, int *x, int *y, int *start, int *end, int *visible);
 const uint8_t *vga_get_palette(VGAState *s);  // 768-byte RGB palette (256 x 3)
-int vga_get_gfx_mode_info(VGAState *s, int *width, int *height, int *bpp);
+void vga_get_palette16(VGAState *s, uint8_t *palette16);  // 48-byte EGA palette (16 x 3)
+int vga_get_graphics_mode(VGAState *s, int *width, int *height);  // Returns: 0=text, 1=CGA, 2=EGA, 3=VGA256
+int vga_get_line_offset(VGAState *s);    // Line offset in words
+int vga_get_line_compare(VGAState *s);   // Scanline where address resets to 0
+bool vga_in_retrace(VGAState *s);        // Check if in vertical retrace
+int vga_get_cursor_blink_phase(VGAState *s);  // Cursor blink phase (1=visible, 0=hidden)
 
 #ifndef BPP
 #define BPP 32
