@@ -1,0 +1,13 @@
+*~
+*.o
+*.a
+*.elf
+*.bin
+*.hex
+*.uf2
+*.dis
+*.map
+.depends
+.claude/
+build/
+.DS_Store
