@@ -160,31 +160,7 @@ static void vga_redraw(void *opaque, int x, int y, int w, int h) {
     (void)y;
     (void)w;
     (void)h;
-
-    if (!pc || !pc->vga) return;
-
-    // Get current VGA mode from emulator
-    int mode = vga_get_mode(pc->vga);
-    vga_hw_set_mode(mode);
-
-    // Get start address for scrolling
-    uint16_t start_addr = vga_get_start_addr(pc->vga);
-    vga_hw_set_vram_offset(start_addr);
-
-    // Update cursor for text mode
-    if (mode == 1) {
-        int cx, cy, cs, ce;
-        vga_get_cursor(pc->vga, &cx, &cy, &cs, &ce);
-        vga_hw_set_cursor(cx, cy, cs, ce);
-    }
-
-    // Update palette (for graphics modes)
-    if (mode == 2) {
-        const uint8_t *pal = vga_get_palette(pc->vga);
-        if (pal) {
-            vga_hw_set_palette(pal);
-        }
-    }
+    // No action needed - VGA updates are handled in the main loop
 }
 
 //=============================================================================
@@ -544,16 +520,114 @@ int main(void) {
     initialized = true;
     printf("\nStarting emulation...\n");
 
+    // VGA update timing
+    uint64_t last_vga_update = 0;
+    const uint64_t vga_interval_us = 16000; // ~60Hz
+
+    // Retrace-based frame submission state
+    static bool was_in_retrace = false;
+    static uint16_t latched_start_addr = 0;
+    static uint8_t latched_panning = 0;
+    static int latched_line_compare = -1;
+    static int last_vga_mode = -1;
+
     // Main emulation loop (Core 0)
     while (true) {
-        // Run CPU steps
-        pc_step(pc);
+        // Run CPU steps - batch multiple steps for efficiency
+        for (int i = 0; i < 10; i++) {
+            pc_step(pc);
 
-        // Poll keyboard periodically (not every step)
+            // Check retrace and submit frame (fast path)
+            // We must check this frequently to catch the VBLANK edge
+            bool in_retrace = vga_in_retrace(pc->vga);
+
+            // Latch values at the END of retrace (falling edge of VBLANK)
+            if (was_in_retrace && !in_retrace) {
+                uint16_t start_addr = vga_get_start_addr(pc->vga);
+                uint8_t panning = vga_get_panning(pc->vga);
+                int line_compare = vga_get_line_compare(pc->vga);
+
+                // Glitch Filter logic - avoid mid-update artifacts during smooth scrolling
+                bool is_glitch = false;
+                if (start_addr == latched_start_addr + 1 && panning >= latched_panning) is_glitch = true;
+                else if (start_addr == latched_start_addr - 1 && panning <= latched_panning) is_glitch = true;
+                else if (latched_panning >= 6 && panning <= 1 && start_addr == latched_start_addr) is_glitch = true;
+                else if (latched_panning <= 1 && panning >= 6 && start_addr == latched_start_addr) is_glitch = true;
+
+                // Persistence check: If a glitch persists for more than 2 frames, assume it's real
+                static int glitch_counter = 0;
+                if (is_glitch) {
+                    glitch_counter++;
+                    if (glitch_counter > 2) {
+                        is_glitch = false;
+                        glitch_counter = 0;
+                    }
+                } else {
+                    glitch_counter = 0;
+                }
+
+                if (!is_glitch) {
+                    latched_start_addr = start_addr;
+                    latched_panning = panning;
+                    latched_line_compare = line_compare;
+                    vga_hw_submit_frame(latched_start_addr, latched_panning, latched_line_compare);
+                }
+            }
+
+            was_in_retrace = in_retrace;
+        }
+
+        // Poll keyboard periodically
         static int poll_counter = 0;
-        if (++poll_counter >= 100) {
+        if (++poll_counter >= 10) {
             poll_counter = 0;
             poll_keyboard();
+        }
+
+        // Update heavy VGA state periodically (cursor, mode, palette)
+        uint64_t now = time_us_64();
+        if (now - last_vga_update >= vga_interval_us) {
+            last_vga_update = now;
+
+            // Update cursor
+            int cx, cy, cs, ce, cv;
+            vga_get_cursor_info(pc->vga, &cx, &cy, &cs, &ce, &cv);
+            if (cv) {
+                vga_hw_set_cursor(cx, cy, cs, ce);
+                // Sync cursor blink phase with emulator
+                vga_hw_set_cursor_blink(vga_get_cursor_blink_phase(pc->vga));
+            } else {
+                vga_hw_set_cursor(-1, -1, 0, 0);  // Hide cursor
+            }
+
+            // Update VGA mode
+            int vga_mode = vga_get_mode(pc->vga);
+            if (vga_mode != last_vga_mode) {
+                vga_hw_set_mode(vga_mode);
+                last_vga_mode = vga_mode;
+            }
+
+            // Update palette and graphics submode for graphics modes
+            if (vga_mode == 2) {
+                vga_hw_set_palette(vga_get_palette(pc->vga));
+
+                int gfx_w, gfx_h;
+                int gfx_submode = vga_get_graphics_mode(pc->vga, &gfx_w, &gfx_h);
+                int line_offset = vga_get_line_offset(pc->vga);
+                vga_hw_set_gfx_mode(gfx_submode, gfx_w, gfx_h, line_offset);
+
+                // For EGA mode, also update the 16-color palette
+                if (gfx_submode == 2) {
+                    uint8_t ega_pal[48];
+                    vga_get_palette16(pc->vga, ega_pal);
+                    vga_hw_set_palette16(ega_pal);
+                }
+            }
+
+            // For text mode, submit frame with current offset
+            if (vga_mode == 1) {
+                vga_hw_set_vram_offset(vga_get_start_addr(pc->vga));
+            }
         }
 
         // Check for reset request

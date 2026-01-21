@@ -508,8 +508,10 @@ void pc_step(PC *pc)
 #ifdef USEKVM
 	cpukvm_step(pc->cpu, 4096);
 #else
-#if defined(BUILD_ESP32) || defined(RP2350_BUILD)
-	cpui386_step(pc->cpu, 8192);
+#if defined(BUILD_ESP32)
+	cpui386_step(pc->cpu, 512);  // ESP32: limited by memory bandwidth
+#elif defined(RP2350_BUILD)
+	cpui386_step(pc->cpu, 2048);  // RP2350: balance speed vs VGA polling
 #else
 	cpui386_step(pc->cpu, 10240);
 #endif
