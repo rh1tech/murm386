@@ -1,0 +1,58 @@
+diff --git a/components/esp_netif/lwip/netif/wlanif.c b/components/esp_netif/lwip/netif/wlanif.c
+index f6bdfae4fa..692a3dde92 100644
+--- a/components/esp_netif/lwip/netif/wlanif.c
++++ b/components/esp_netif/lwip/netif/wlanif.c
+@@ -114,6 +114,11 @@ static err_t low_level_output(struct netif *netif, struct pbuf *p)
+     return ERR_IF;
+ }
+ 
++__attribute__((weak)) int wlanif_l2_input_hook(uint8_t *buf, int size)
++{
++    return 0;
++}
++
+ /**
+  * This function should be called when a packet is ready to be read
+  * from the interface. It uses the function low_level_input() that
+@@ -139,6 +144,11 @@ esp_netif_recv_ret_t wlanif_input(void *h, void *buffer, size_t len, void* l2_bu
+         return ESP_NETIF_OPTIONAL_RETURN_CODE(ESP_FAIL);
+     }
+ 
++    if (wlanif_l2_input_hook(buffer, len)) {
++        esp_netif_free_rx_buffer(esp_netif, l2_buff);
++        return ESP_NETIF_OPTIONAL_RETURN_CODE(ESP_OK);
++    }
++
+ #ifdef CONFIG_LWIP_L2_TO_L3_COPY
+     p = pbuf_alloc(PBUF_RAW, len, PBUF_RAM);
+     if (p == NULL) {
+diff --git a/components/esp_psram/esp_psram.c b/components/esp_psram/esp_psram.c
+index daaa2d55e0..3e980e7278 100644
+--- a/components/esp_psram/esp_psram.c
++++ b/components/esp_psram/esp_psram.c
+@@ -299,6 +299,12 @@ esp_err_t esp_psram_init(void)
+     return ESP_OK;
+ }
+ 
++void *esp_psram_get(size_t *size)
++{
++    *size = s_psram_ctx.regions_to_heap[PSRAM_MEM_8BIT_ALIGNED].size;
++    return (void *) s_psram_ctx.regions_to_heap[PSRAM_MEM_8BIT_ALIGNED].vaddr_start;
++}
++
+ esp_err_t esp_psram_extram_add_to_heap_allocator(void)
+ {
+     esp_err_t ret = ESP_FAIL;
+diff --git a/components/fatfs/src/ffconf.h b/components/fatfs/src/ffconf.h
+index 7e25dd08f0..a735bd6f94 100644
+--- a/components/fatfs/src/ffconf.h
++++ b/components/fatfs/src/ffconf.h
+@@ -251,7 +251,7 @@
+ /  buffer in the filesystem object (FATFS) is used for the file data transfer. */
+ 
+ 
+-#define FF_FS_EXFAT		0
++#define FF_FS_EXFAT		1
+ /* This option switches support for exFAT filesystem. (0:Disable or 1:Enable)
+ /  To enable exFAT, also LFN needs to be enabled. (FF_USE_LFN >= 1)
+ /  Note that enabling exFAT discards ANSI C (C89) compatibility. */

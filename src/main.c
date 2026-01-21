@@ -1,0 +1,578 @@
+/**
+ * murm386 - 386 Emulator for RP2350
+ *
+ * Main entry point for the RP2350 platform.
+ * Initializes hardware, loads configuration, and starts the emulator.
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "pico/stdlib.h"
+#include "pico/multicore.h"
+#include "hardware/clocks.h"
+#include "hardware/vreg.h"
+#include "hardware/gpio.h"
+#include "hardware/flash.h"
+
+#include "hardware/structs/qmi.h"
+
+#include "board_config.h"
+#include "psram_init.h"
+#include "vga_hw.h"
+#include "vga.h"
+#include "ps2kbd_wrapper.h"
+#include "sdcard.h"
+#include "ff.h"
+
+#include "pc.h"
+#include "ini.h"
+
+//=============================================================================
+// Version Information
+//=============================================================================
+
+#define MURM386_VERSION "1.0.0"
+
+//=============================================================================
+// Global State
+//=============================================================================
+
+static PC *pc = NULL;
+static PCConfig config;
+static bool initialized = false;
+
+// Framebuffer for VGA output (in PSRAM)
+static uint8_t *framebuffer = NULL;
+
+// FatFS state
+static FATFS fatfs;
+
+//=============================================================================
+// Platform HAL Implementation
+//=============================================================================
+
+/**
+ * Get microsecond timestamp.
+ */
+uint32_t get_uticks(void) {
+    return time_us_32();
+}
+
+/**
+ * Allocate memory (uses PSRAM for large allocations).
+ */
+void *pcmalloc(long size) {
+    // For small allocations, use regular malloc
+    if (size < 4096) {
+        return malloc(size);
+    }
+    // For large allocations, use PSRAM
+    return bigmalloc(size);
+}
+
+/**
+ * Allocate large memory block from PSRAM.
+ */
+static uint8_t *psram_alloc_ptr = NULL;
+
+void *bigmalloc(size_t size) {
+    if (!psram_alloc_ptr) {
+        psram_alloc_ptr = (uint8_t *)PSRAM_BASE_ADDR;
+    }
+
+    // Align to 4 bytes
+    size = (size + 3) & ~3;
+
+    void *ptr = psram_alloc_ptr;
+    psram_alloc_ptr += size;
+
+    // Check bounds
+    if ((uintptr_t)psram_alloc_ptr > (PSRAM_BASE_ADDR + PSRAM_SIZE_BYTES)) {
+        printf("ERROR: PSRAM allocation overflow!\n");
+        return NULL;
+    }
+
+    return ptr;
+}
+
+/**
+ * Load ROM file from SD card to memory.
+ */
+int load_rom(void *phys_mem, const char *file, uword addr, int backward) {
+    FIL fp;
+    FRESULT res;
+    UINT bytes_read;
+
+    char path[256];
+    snprintf(path, sizeof(path), "386/%s", file);
+
+    res = f_open(&fp, path, FA_READ);
+    if (res != FR_OK) {
+        printf("Failed to open ROM: %s (error %d)\n", path, res);
+        return -1;
+    }
+
+    FSIZE_t size = f_size(&fp);
+
+    uint8_t *dest;
+    if (backward) {
+        // Load so ROM ends at addr (for BIOS - should end at 1MB boundary)
+        dest = (uint8_t *)phys_mem + addr - size;
+        printf("Loading ROM: %s (%lu bytes) at 0x%08lx-0x%08lx (dest=%p)\n",
+               file, (unsigned long)size,
+               (unsigned long)(addr - size), (unsigned long)(addr - 1), dest);
+    } else {
+        dest = (uint8_t *)phys_mem + addr;
+        printf("Loading ROM: %s (%lu bytes) at 0x%08lx (dest=%p)\n",
+               file, (unsigned long)size, (unsigned long)addr, dest);
+    }
+
+    res = f_read(&fp, dest, size, &bytes_read);
+    if (res != FR_OK || bytes_read != size) {
+        f_close(&fp);
+        printf("Failed to read ROM: %s (error %d, read %u of %lu)\n",
+               file, res, bytes_read, (unsigned long)size);
+        return -1;
+    }
+
+    f_close(&fp);
+
+    // Debug: verify data was written to memory
+    printf("  First bytes: %02x %02x %02x %02x %02x %02x %02x %02x\n",
+           dest[0], dest[1], dest[2], dest[3],
+           dest[4], dest[5], dest[6], dest[7]);
+    printf("  Last bytes:  %02x %02x %02x %02x %02x %02x %02x %02x\n",
+           dest[size-8], dest[size-7], dest[size-6], dest[size-5],
+           dest[size-4], dest[size-3], dest[size-2], dest[size-1]);
+
+    return (int)size;  // Return size on success
+}
+
+//=============================================================================
+// VGA Redraw Callback - Bridge emulator VGA state to hardware driver
+//=============================================================================
+
+static void vga_redraw(void *opaque, int x, int y, int w, int h) {
+    (void)opaque;
+    (void)x;
+    (void)y;
+    (void)w;
+    (void)h;
+
+    if (!pc || !pc->vga) return;
+
+    // Get current VGA mode from emulator
+    int mode = vga_get_mode(pc->vga);
+    vga_hw_set_mode(mode);
+
+    // Get start address for scrolling
+    uint16_t start_addr = vga_get_start_addr(pc->vga);
+    vga_hw_set_vram_offset(start_addr);
+
+    // Update cursor for text mode
+    if (mode == 1) {
+        int cx, cy, cs, ce;
+        vga_get_cursor(pc->vga, &cx, &cy, &cs, &ce);
+        vga_hw_set_cursor(cx, cy, cs, ce);
+    }
+
+    // Update palette (for graphics modes)
+    if (mode == 2) {
+        const uint8_t *pal = vga_get_palette(pc->vga);
+        if (pal) {
+            vga_hw_set_palette(pal);
+        }
+    }
+}
+
+//=============================================================================
+// Keyboard Polling
+//=============================================================================
+
+static void poll_keyboard(void) {
+    ps2kbd_tick();
+
+    int is_down, keycode;
+    while (ps2kbd_get_key(&is_down, &keycode)) {
+        if (pc && pc->kbd) {
+            ps2_put_keycode(pc->kbd, is_down, keycode);
+        }
+    }
+}
+
+//=============================================================================
+// Platform Poll Callback
+//=============================================================================
+
+static void platform_poll(void *opaque) {
+    (void)opaque;
+    poll_keyboard();
+    // VGA update is handled by Core 1, don't call here to avoid contention
+}
+
+//=============================================================================
+// Configuration Loading
+//=============================================================================
+
+static void load_default_config(void) {
+    memset(&config, 0, sizeof(config));
+
+    // Default memory configuration
+    config.mem_size = EMU_MEM_SIZE_MB * 1024 * 1024;
+    config.vga_mem_size = EMU_VGA_MEM_SIZE_KB * 1024;
+
+    // CPU configuration
+    config.cpu_gen = EMU_CPU_GEN;
+    config.fpu = 0;  // Disabled for initial port
+
+    // Display configuration
+    config.width = 640;
+    config.height = 400;
+
+    // BIOS files (relative to 386 directory on SD card)
+    config.bios = "bios.bin";
+    config.vga_bios = "vgabios.bin";
+
+    // No disks by default (set via INI file)
+    for (int i = 0; i < 4; i++) {
+        config.disks[i] = NULL;
+        config.iscd[i] = 0;
+    }
+    config.fdd[0] = NULL;
+    config.fdd[1] = NULL;
+
+    config.fill_cmos = 1;
+    config.enable_serial = 0;
+    config.vga_force_8dm = 0;
+}
+
+static int load_config_from_sd(const char *filename) {
+    FIL fp;
+    FRESULT res;
+    DIR dir;
+    FILINFO fno;
+
+    // Debug: List 386 directory contents
+    printf("Checking SD card contents...\n");
+    res = f_opendir(&dir, "386");
+    if (res == FR_OK) {
+        printf("  386/ directory found, contents:\n");
+        while (f_readdir(&dir, &fno) == FR_OK && fno.fname[0] != 0) {
+            printf("    %s%s (%lu bytes)\n",
+                   fno.fname,
+                   (fno.fattrib & AM_DIR) ? "/" : "",
+                   (unsigned long)fno.fsize);
+        }
+        f_closedir(&dir);
+    } else {
+        printf("  386/ directory not found (error %d)\n", res);
+        // Try root directory
+        res = f_opendir(&dir, "");
+        if (res == FR_OK) {
+            printf("  Root directory contents:\n");
+            while (f_readdir(&dir, &fno) == FR_OK && fno.fname[0] != 0) {
+                printf("    %s%s\n", fno.fname, (fno.fattrib & AM_DIR) ? "/" : "");
+            }
+            f_closedir(&dir);
+        }
+    }
+
+    char path[256];
+    snprintf(path, sizeof(path), "386/%s", filename);
+
+    res = f_open(&fp, path, FA_READ);
+    if (res != FR_OK) {
+        printf("Config file not found: %s (error %d)\n", path, res);
+        return -1;
+    }
+
+    printf("Loading config: %s\n", path);
+
+    // Read entire file
+    FSIZE_t size = f_size(&fp);
+    char *content = malloc(size + 1);
+    if (!content) {
+        f_close(&fp);
+        return -1;
+    }
+
+    UINT bytes_read;
+    res = f_read(&fp, content, size, &bytes_read);
+    f_close(&fp);
+
+    if (res != FR_OK) {
+        free(content);
+        return -1;
+    }
+
+    content[size] = '\0';
+
+    // Parse INI content
+    if (ini_parse_string(content, parse_conf_ini, &config) != 0) {
+        printf("Failed to parse config\n");
+        free(content);
+        return -1;
+    }
+
+    free(content);
+    return 0;
+}
+
+//=============================================================================
+// Clock Configuration
+//=============================================================================
+
+// Flash timing configuration for overclocking
+#define FLASH_MAX_FREQ_MHZ 88
+
+static void __no_inline_not_in_flash_func(set_flash_timings)(int cpu_mhz) {
+    const int clock_hz = cpu_mhz * 1000000;
+    const int max_flash_freq = FLASH_MAX_FREQ_MHZ * 1000000;
+
+    int divisor = (clock_hz + max_flash_freq - (max_flash_freq >> 4) - 1) / max_flash_freq;
+    if (divisor == 1 && clock_hz >= 166000000) {
+        divisor = 2;
+    }
+
+    int rxdelay = divisor;
+    if (clock_hz / divisor > 100000000 && clock_hz >= 166000000) {
+        rxdelay += 1;
+    }
+
+    qmi_hw->m[0].timing = 0x60007000 |
+                        rxdelay << QMI_M0_TIMING_RXDELAY_LSB |
+                        divisor << QMI_M0_TIMING_CLKDIV_LSB;
+}
+
+static void configure_clocks(void) {
+#if CPU_CLOCK_MHZ > 252
+    // Overclock: disable voltage limit and set higher voltage
+    printf("Configuring overclock: %d MHz @ %s\n", CPU_CLOCK_MHZ,
+           CPU_CLOCK_MHZ >= 504 ? "1.65V" :
+           CPU_CLOCK_MHZ >= 378 ? "1.60V" : "1.50V");
+
+    vreg_disable_voltage_limit();
+    vreg_set_voltage(CPU_VOLTAGE);
+    sleep_ms(100);  // Stabilization delay
+
+    // Configure flash timing BEFORE changing clock
+    set_flash_timings(CPU_CLOCK_MHZ);
+#endif
+
+    // Set system clock
+    set_sys_clock_khz(CPU_CLOCK_MHZ * 1000, false);
+
+    printf("System clock: %lu MHz\n", clock_get_hz(clk_sys) / 1000000);
+}
+
+//=============================================================================
+// Hardware Initialization
+//=============================================================================
+
+static bool init_hardware(void) {
+    // Configure clocks (including overclock if enabled)
+    configure_clocks();
+
+    // Initialize PSRAM
+    printf("Initializing PSRAM...\n");
+    uint psram_pin = get_psram_pin();
+    printf("  PSRAM CS pin: GPIO%d\n", psram_pin);
+    psram_init(psram_pin);
+
+    if (!psram_test()) {
+        printf("ERROR: PSRAM test failed!\n");
+        return false;
+    }
+    printf("  PSRAM test passed (8MB)\n");
+
+    // Initialize SD card
+    printf("Initializing SD card...\n");
+    FRESULT res = f_mount(&fatfs, "", 1);
+    if (res != FR_OK) {
+        printf("ERROR: Failed to mount SD card (error %d)\n", res);
+        return false;
+    }
+    printf("  SD card mounted\n");
+
+    // Initialize PS/2 keyboard
+    printf("Initializing PS/2 keyboard...\n");
+    printf("  CLK: GPIO%d, DATA: GPIO%d\n", PS2_PIN_CLK, PS2_PIN_DATA);
+    ps2kbd_init(PS2_PIN_CLK);
+
+    // Initialize VGA
+    printf("Initializing VGA...\n");
+    printf("  Base pin: GPIO%d\n", VGA_BASE_PIN);
+    vga_hw_init();
+
+    return true;
+}
+
+//=============================================================================
+// Emulator Initialization
+//=============================================================================
+
+static bool init_emulator(void) {
+    // Load configuration
+    load_default_config();
+
+    // Try to load config from SD card
+    if (load_config_from_sd("config.ini") != 0) {
+        printf("Using default configuration\n");
+    }
+
+    printf("\nEmulator configuration:\n");
+    printf("  Memory: %ld MB\n", config.mem_size / (1024 * 1024));
+    printf("  VGA Memory: %ld KB\n", config.vga_mem_size / 1024);
+    printf("  CPU: %d86\n", config.cpu_gen);
+    printf("  BIOS: %s\n", config.bios ? config.bios : "(none)");
+    printf("  VGA BIOS: %s\n", config.vga_bios ? config.vga_bios : "(none)");
+    printf("  Floppy A: %s\n", config.fdd[0] ? config.fdd[0] : "(none)");
+    printf("  Floppy B: %s\n", config.fdd[1] ? config.fdd[1] : "(none)");
+
+    // Calculate total PSRAM needed
+    size_t total_psram = config.mem_size + config.vga_mem_size;
+    printf("  PSRAM needed: %lu KB (available: %lu KB)\n",
+           (unsigned long)(total_psram / 1024),
+           (unsigned long)(PSRAM_SIZE_BYTES / 1024));
+
+    if (total_psram > PSRAM_SIZE_BYTES) {
+        printf("WARNING: Reducing memory to fit in PSRAM\n");
+        config.mem_size = PSRAM_SIZE_BYTES - config.vga_mem_size - (64 * 1024);  // Leave 64KB margin
+        printf("  Adjusted memory: %ld MB\n", config.mem_size / (1024 * 1024));
+    }
+
+    // Create PC instance
+    printf("\nCreating PC instance...\n");
+    pc = pc_new(vga_redraw, platform_poll, NULL, NULL, &config);
+    if (!pc) {
+        printf("ERROR: Failed to create PC instance\n");
+        return false;
+    }
+
+    // Set VGA VRAM pointer (VGA memory is allocated by pc_new)
+    vga_hw_set_vram((uint8_t *)pc->vga_mem);
+    printf("  VGA VRAM set to 0x%08lx\n", (unsigned long)pc->vga_mem);
+
+    // Load BIOS and reset
+    printf("Loading BIOS...\n");
+    load_bios_and_reset(pc);
+
+    return true;
+}
+
+//=============================================================================
+// Core 1 Entry Point (VGA rendering)
+//=============================================================================
+
+static void core1_entry(void) {
+    printf("[Core 1] VGA rendering started\n");
+
+    while (true) {
+        // VGA driver handles rendering in DMA IRQ
+        // Core 1 can do VGA updates from PSRAM
+        if (initialized && pc) {
+            vga_hw_update();
+        }
+        tight_loop_contents();
+    }
+}
+
+//=============================================================================
+// Main Entry Point
+//=============================================================================
+
+int main(void) {
+    // Initialize stdio (USB Serial)
+    stdio_init_all();
+
+    // Wait for USB Serial connection (with timeout)
+    printf("\n\n");
+    printf("============================================\n");
+    printf("  murm386 - 386 Emulator for RP2350\n");
+    printf("  Version %s\n", MURM386_VERSION);
+    printf("============================================\n\n");
+
+    printf("Waiting for USB Serial connection...\n");
+    printf("(Press any key or wait %d seconds)\n\n", USB_CONSOLE_DELAY_MS / 1000);
+
+    // 5 second delay for USB Serial connection
+    absolute_time_t deadline = make_timeout_time_ms(USB_CONSOLE_DELAY_MS);
+    while (!stdio_usb_connected() && !time_reached(deadline)) {
+        sleep_ms(100);
+    }
+
+    if (stdio_usb_connected()) {
+        printf("USB Serial connected!\n\n");
+    } else {
+        printf("Timeout - continuing without USB Serial\n\n");
+    }
+
+    // Print board configuration
+    printf("Board Configuration:\n");
+#ifdef BOARD_M1
+    printf("  Board: M1\n");
+#elif defined(BOARD_M2)
+    printf("  Board: M2\n");
+#else
+    printf("  Board: Unknown\n");
+#endif
+    printf("  CPU Speed: %d MHz\n", CPU_CLOCK_MHZ);
+    printf("  PSRAM Speed: %d MHz\n", PSRAM_MAX_FREQ_MHZ);
+    printf("\n");
+
+    // Initialize hardware
+    if (!init_hardware()) {
+        printf("\nHardware initialization failed!\n");
+        while (true) {
+            sleep_ms(1000);
+        }
+    }
+
+    // Initialize emulator
+    if (!init_emulator()) {
+        printf("\nEmulator initialization failed!\n");
+        while (true) {
+            sleep_ms(1000);
+        }
+    }
+
+    // Start Core 1 for VGA rendering
+    multicore_launch_core1(core1_entry);
+
+    initialized = true;
+    printf("\nStarting emulation...\n");
+
+    // Main emulation loop (Core 0)
+    while (true) {
+        // Run CPU steps
+        pc_step(pc);
+
+        // Poll keyboard periodically (not every step)
+        static int poll_counter = 0;
+        if (++poll_counter >= 100) {
+            poll_counter = 0;
+            poll_keyboard();
+        }
+
+        // Check for reset request
+        if (pc->reset_request) {
+            pc->reset_request = 0;
+            load_bios_and_reset(pc);
+        }
+
+        // Check for shutdown
+        if (pc->shutdown_state) {
+            break;
+        }
+    }
+
+    printf("\nEmulation stopped.\n");
+
+    while (true) {
+        sleep_ms(1000);
+    }
+
+    return 0;
+}
