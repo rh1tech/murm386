@@ -379,16 +379,33 @@ static inline uint32_t ega_pack8_from_planes(const uint32_t ega_planes) {
     return pixel1 | pixel2 << 1 | pixel3 << 2 | pixel4 << 3;
 }
 
-// Render EGA planar 16-color graphics line (320x200 mode only - hardcoded for speed)
+// Render EGA planar 16-color graphics line
+// Supports both 320x200 (doubled) and 640x350 (native) modes
 // Reads from SRAM buffer (copied from PSRAM during main loop)
 static void __time_critical_func(render_gfx_line_ega)(uint32_t line, uint32_t *output_buffer) {
-    // Hardcode for 320x200 mode (most common EGA game mode)
-    // 40 uint32_t per line, doubled vertically and horizontally
-    uint32_t src_line = line >> 1;  // /2 for vertical doubling
-    
     uint32_t *out32 = output_buffer + SHIFT_PICTURE / 4;
-    
-    if (src_line >= 200) {
+
+    // Determine if we need pixel doubling (for 320-wide modes)
+    int double_pixels = (gfx_width <= 320);
+
+    // Determine source line with appropriate scaling
+    // 400 display lines -> gfx_height source lines
+    uint32_t src_line;
+    if (gfx_height <= 200) {
+        // 200-line mode: double vertically (400/2 = 200)
+        src_line = line >> 1;
+    } else if (gfx_height <= 350) {
+        // 350-line mode: map 400 display lines to 350 source lines
+        // Scale: src = line * 350 / 400 = line * 7 / 8
+        src_line = (line * 7) >> 3;
+    } else {
+        // 400-line mode: 1:1 mapping
+        src_line = line;
+    }
+
+    // Check if source line is beyond the actual height
+    int height = gfx_height > 0 ? gfx_height : 200;
+    if (src_line >= (uint32_t)height) {
         // Blank line - fast fill
         uint32_t blank = TMPL_LINE | (TMPL_LINE << 8) | (TMPL_LINE << 16) | (TMPL_LINE << 24);
         for (int i = 0; i < 160; i++) {
@@ -396,46 +413,75 @@ static void __time_critical_func(render_gfx_line_ega)(uint32_t line, uint32_t *o
         }
         return;
     }
-    
+
     // Snapshot display buffer pointer
     const uint8_t *disp_buf = gfx_display_buffer;
-    
+
     // Read from display buffer (stable during active video)
     // Use calculated stride
     const uint32_t *src32 = (const uint32_t *)disp_buf + (src_line * gfx_sram_stride);
-    
+
     int panning = frame_pixel_panning;
     int shift = panning * 4;
-    
-    // Loop over display width (e.g. 40 words for 320px)
+
+    // Loop over display width
     int words_to_render = gfx_width / 8;
     if (words_to_render > 80) words_to_render = 80; // Cap at 640px
-    
-    for (int i = 0; i < words_to_render; i++) {
-        uint32_t ega_planes = src32[i];
-        uint32_t eight_pixels = ega_pack8_from_planes(ega_planes);
-        
-        if (panning > 0) {
-            uint32_t next_planes = src32[i+1];
-            uint32_t next_eight = ega_pack8_from_planes(next_planes);
-            eight_pixels = (eight_pixels << shift) | (next_eight >> (32 - shift));
+
+    if (double_pixels) {
+        // 320-wide mode: double each pixel horizontally
+        for (int i = 0; i < words_to_render; i++) {
+            uint32_t ega_planes = src32[i];
+            uint32_t eight_pixels = ega_pack8_from_planes(ega_planes);
+
+            if (panning > 0) {
+                uint32_t next_planes = src32[i+1];
+                uint32_t next_eight = ega_pack8_from_planes(next_planes);
+                eight_pixels = (eight_pixels << shift) | (next_eight >> (32 - shift));
+            }
+
+            // Lookup and double each pixel
+            uint8_t c0 = ega_palette[eight_pixels >> 28];
+            uint8_t c1 = ega_palette[(eight_pixels >> 24) & 0xF];
+            uint8_t c2 = ega_palette[(eight_pixels >> 20) & 0xF];
+            uint8_t c3 = ega_palette[(eight_pixels >> 16) & 0xF];
+            uint8_t c4 = ega_palette[(eight_pixels >> 12) & 0xF];
+            uint8_t c5 = ega_palette[(eight_pixels >> 8) & 0xF];
+            uint8_t c6 = ega_palette[(eight_pixels >> 4) & 0xF];
+            uint8_t c7 = ega_palette[eight_pixels & 0xF];
+
+            // 4 x 32-bit writes = 16 bytes (8 doubled pixels)
+            *out32++ = c0 | (c0 << 8) | (c1 << 16) | (c1 << 24);
+            *out32++ = c2 | (c2 << 8) | (c3 << 16) | (c3 << 24);
+            *out32++ = c4 | (c4 << 8) | (c5 << 16) | (c5 << 24);
+            *out32++ = c6 | (c6 << 8) | (c7 << 16) | (c7 << 24);
         }
-        
-        // Lookup and double each pixel
-        uint8_t c0 = ega_palette[eight_pixels >> 28];
-        uint8_t c1 = ega_palette[(eight_pixels >> 24) & 0xF];
-        uint8_t c2 = ega_palette[(eight_pixels >> 20) & 0xF];
-        uint8_t c3 = ega_palette[(eight_pixels >> 16) & 0xF];
-        uint8_t c4 = ega_palette[(eight_pixels >> 12) & 0xF];
-        uint8_t c5 = ega_palette[(eight_pixels >> 8) & 0xF];
-        uint8_t c6 = ega_palette[(eight_pixels >> 4) & 0xF];
-        uint8_t c7 = ega_palette[eight_pixels & 0xF];
-        
-        // 4 x 32-bit writes = 16 bytes (8 doubled pixels)
-        *out32++ = c0 | (c0 << 8) | (c1 << 16) | (c1 << 24);
-        *out32++ = c2 | (c2 << 8) | (c3 << 16) | (c3 << 24);
-        *out32++ = c4 | (c4 << 8) | (c5 << 16) | (c5 << 24);
-        *out32++ = c6 | (c6 << 8) | (c7 << 16) | (c7 << 24);
+    } else {
+        // 640-wide mode: no horizontal doubling
+        for (int i = 0; i < words_to_render; i++) {
+            uint32_t ega_planes = src32[i];
+            uint32_t eight_pixels = ega_pack8_from_planes(ega_planes);
+
+            if (panning > 0) {
+                uint32_t next_planes = src32[i+1];
+                uint32_t next_eight = ega_pack8_from_planes(next_planes);
+                eight_pixels = (eight_pixels << shift) | (next_eight >> (32 - shift));
+            }
+
+            // Lookup each pixel (no doubling)
+            uint8_t c0 = ega_palette[eight_pixels >> 28];
+            uint8_t c1 = ega_palette[(eight_pixels >> 24) & 0xF];
+            uint8_t c2 = ega_palette[(eight_pixels >> 20) & 0xF];
+            uint8_t c3 = ega_palette[(eight_pixels >> 16) & 0xF];
+            uint8_t c4 = ega_palette[(eight_pixels >> 12) & 0xF];
+            uint8_t c5 = ega_palette[(eight_pixels >> 8) & 0xF];
+            uint8_t c6 = ega_palette[(eight_pixels >> 4) & 0xF];
+            uint8_t c7 = ega_palette[eight_pixels & 0xF];
+
+            // 2 x 32-bit writes = 8 bytes (8 pixels, no doubling)
+            *out32++ = c0 | (c1 << 8) | (c2 << 16) | (c3 << 24);
+            *out32++ = c4 | (c5 << 8) | (c6 << 16) | (c7 << 24);
+        }
     }
 }
 
