@@ -2554,8 +2554,15 @@ bool vga_in_retrace(VGAState *s)
     return (s->st01 & ST01_V_RETRACE) != 0;
 }
 
-/* Get cursor blink phase (1 = visible, 0 = hidden during blink) */
+/* Get cursor blink phase (1 = visible, 0 = hidden during blink)
+ * Also updates the blink state based on time for hardware VGA drivers
+ * that don't use vga_display_update_text */
 int vga_get_cursor_blink_phase(VGAState *s)
 {
+    uint32_t now = get_uticks();
+    if (after_eq(now, s->cursor_blink_time)) {
+        s->cursor_blink_time = now + 266666;  // ~3.75 Hz blink rate
+        s->cursor_visible_phase = !s->cursor_visible_phase;
+    }
     return s->cursor_visible_phase;
 }
