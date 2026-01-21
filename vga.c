@@ -831,21 +831,25 @@ static void vga_text_refresh(VGAState *s,
                     uint8_t *dst1;
                     line_start = cursor_start & 0x1f;
                     line_last = cursor_end & 0x1f;
+
+                    /* Handle invalid cursor shape - use underline as fallback */
+                    if (line_last < line_start || line_start >= cheight) {
+                        line_start = cheight > 2 ? cheight - 2 : 0;
+                        line_last = cheight - 1;
+                    }
                     if (line_last > cheight - 1)
                         line_last = cheight - 1;
 
-                    if (line_last >= line_start && line_start < cheight) {
-                        h = line_last - line_start + 1;
-                        dst1 = dst + stride * line_start;
-                        if (cwidth == 8) {
-                            vga_draw_glyph8(dst1, stride,
-                                            cursor_glyph,
-                                            h, fgcol, bgcol);
-                        } else {
-                            vga_draw_glyph9(dst1, stride,
-                                            cursor_glyph,
-                                            h, fgcol, bgcol, 1);
-                        }
+                    h = line_last - line_start + 1;
+                    dst1 = dst + stride * line_start;
+                    if (cwidth == 8) {
+                        vga_draw_glyph8(dst1, stride,
+                                        cursor_glyph,
+                                        h, fgcol, bgcol);
+                    } else {
+                        vga_draw_glyph9(dst1, stride,
+                                        cursor_glyph,
+                                        h, fgcol, bgcol, 1);
                     }
                 }
             }
@@ -2402,10 +2406,12 @@ void vga_get_cursor(VGAState *s, int *x, int *y, int *start, int *end)
         return;
     }
 
-    // Get cursor offset from CRT registers
-    uint16_t cursor_offset = s->cr[0xe] | (s->cr[0xf] << 8);
+    // Get cursor offset from CRT registers (0x0E=high, 0x0F=low)
+    uint16_t cursor_pos = (s->cr[0x0e] << 8) | s->cr[0x0f];
+    uint16_t start_addr = s->cr[0x0d] | (s->cr[0x0c] << 8);
+    int cursor_offset = cursor_pos - start_addr;  // Relative to visible screen
 
-    // Calculate x, y from offset (assuming 80 columns)
+    // Calculate x, y from offset
     int width = (s->cr[0x01] + 1);
     if (width <= 0) width = 80;
 
