@@ -805,23 +805,25 @@ void mixer_callback (void *opaque, uint8_t *stream, int free)
 		sb16_audio_callback(pc->sb16, stream, free);
 	}
 
-	// Mix Adlib into output
+	// Mix sources with attenuation to prevent clipping
+	// Each source is attenuated by >>1 (50%) before mixing
 	int16_t *d2 = (int16_t *) stream;
 	int16_t *d1 = (int16_t *) tmpbuf;
 	for (int i = 0; i < free / 2; i++) {
-		int res = d2[i] + d1[i / 2];
+		// Attenuate SB16 and Adlib before mixing
+		int res = (d2[i] >> 1) + (d1[i / 2] >> 1);
 		if (res > 32767) res = 32767;
 		if (res < -32768) res = -32768;
 		d2[i] = res;
 	}
 
-	// PC Speaker - mono u8
+	// PC Speaker - mono u8 (attenuate: shift 4 instead of 5)
 	if (pc->pcspk && pcspk_get_active_out(pc->pcspk)) {
 		memset(tmpbuf, 0x80, MIXER_BUF_LEN / 2);
 		pcspk_callback(pc->pcspk, tmpbuf, free / 4);
 		for (int i = 0; i < free / 2; i++) {
 			int res = d2[i];
-			res += ((int) tmpbuf[i / 2] - 0x80) << 5;
+			res += ((int) tmpbuf[i / 2] - 0x80) << 4;  // Reduced from <<5
 			if (res > 32767) res = 32767;
 			if (res < -32768) res = -32768;
 			d2[i] = res;

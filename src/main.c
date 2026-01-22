@@ -448,17 +448,29 @@ static bool init_emulator(void) {
 }
 
 //=============================================================================
-// Core 1 Entry Point (VGA rendering)
+// Core 1 Entry Point (VGA rendering + Audio processing)
 //=============================================================================
 
 static void core1_entry(void) {
-    printf("[Core 1] VGA rendering started\n");
+    printf("[Core 1] VGA rendering + Audio started\n");
+
+    // Audio timing - run at ~60Hz (every ~16666us)
+    uint64_t last_audio_time = 0;
+    const uint64_t audio_interval_us = 16666;
 
     while (true) {
         // VGA driver handles rendering in DMA IRQ
         // Core 1 can do VGA updates from PSRAM
         if (initialized && pc) {
             vga_hw_update();
+
+            // Process audio at ~60Hz
+            uint64_t now = time_us_64();
+            if (now - last_audio_time >= audio_interval_us) {
+                last_audio_time = now;
+                // Mix SB16, Adlib, PC Speaker and output to I2S
+                audio_process_frame(pc);
+            }
         }
         tight_loop_contents();
     }
@@ -593,13 +605,11 @@ int main(void) {
             poll_keyboard();
         }
 
-        // Update heavy VGA state and audio periodically (~60Hz)
+        // Update heavy VGA state periodically (~60Hz)
+        // Note: Audio processing is handled by Core 1 for better performance
         uint64_t now = time_us_64();
         if (now - last_vga_update >= vga_interval_us) {
             last_vga_update = now;
-
-            // Process audio frame - mix SB16, Adlib, PC Speaker and output to I2S
-            audio_process_frame(pc);
 
             // Update cursor
             int cx, cy, cs, ce, cv;
