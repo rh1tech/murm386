@@ -545,12 +545,23 @@ int main(void) {
     uint64_t last_vga_update = 0;
     const uint64_t vga_interval_us = 16000; // ~60Hz
 
+    // Frame rate throttling for audio sync
+    // Target ~60fps to match audio processing rate (16666us per frame)
+    uint64_t frame_start_time = time_us_64();
+    const uint64_t target_frame_time_us = 16666; // 60Hz = 16.666ms per frame
+    int frame_step_count = 0;
+    const int steps_per_frame = 100; // Number of outer loop iterations per frame
+
     // Retrace-based frame submission state
     static bool was_in_retrace = false;
     static uint16_t latched_start_addr = 0;
     static uint8_t latched_panning = 0;
     static int latched_line_compare = -1;
     static int last_vga_mode = -1;
+
+    // Frame skipping - skip every other frame for better performance
+    int frame_skip_counter = 0;
+    const int frame_skip_pattern = 2; // Render 1 frame, skip 1 (30fps display)
 
     // Main emulation loop (Core 0)
     while (true) {
@@ -591,7 +602,14 @@ int main(void) {
                     latched_start_addr = start_addr;
                     latched_panning = panning;
                     latched_line_compare = line_compare;
-                    vga_hw_submit_frame(latched_start_addr, latched_panning, latched_line_compare);
+
+                    // Frame skipping: only submit frame if not skipped
+                    frame_skip_counter++;
+                    if (frame_skip_counter < frame_skip_pattern) {
+                        vga_hw_submit_frame(latched_start_addr, latched_panning, latched_line_compare);
+                    } else {
+                        frame_skip_counter = 0; // Reset counter, skip this frame
+                    }
                 }
             }
 
@@ -661,6 +679,22 @@ int main(void) {
         // Check for shutdown
         if (pc->shutdown_state) {
             break;
+        }
+
+        // Frame rate throttling for audio synchronization
+        frame_step_count++;
+        if (frame_step_count >= steps_per_frame) {
+            frame_step_count = 0;
+            uint64_t now = time_us_64();
+            uint64_t elapsed = now - frame_start_time;
+
+            // If we finished the frame early, wait for the remaining time
+            if (elapsed < target_frame_time_us) {
+                uint64_t sleep_time = target_frame_time_us - elapsed;
+                sleep_us(sleep_time);
+            }
+            // Reset frame timer for next frame
+            frame_start_time = time_us_64();
         }
     }
 
