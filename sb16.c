@@ -1169,7 +1169,7 @@ static int write_audio (SB16State *s, int nchan, int dma_pos,
     IsaDma *isa_dma = nchan == s->dma ? s->isa_dma : s->isa_hdma;
 
     int temp, net;
-#ifdef BUILD_ESP32
+#if defined(BUILD_ESP32) || defined(RP2350_BUILD)
     uint8_t tmpbuf[512];
 #else
     uint8_t tmpbuf[4096];
