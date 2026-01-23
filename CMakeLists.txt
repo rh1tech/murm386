@@ -130,7 +130,7 @@ set(EMU_CORE_SOURCES
 
     # Devices
     vga.c        # VGA emulation
-    ide.c        # IDE/Hard disk
+    disk.c       # INT 13h disk handler (from pico-286)
     pci.c        # PCI bus
     misc.c       # Serial, RTC, CMOS
 

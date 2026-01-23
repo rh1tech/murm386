@@ -5,10 +5,8 @@ CC = ${CC_${PLAT}}
 HOSTCC = ${CC}
 
 SDL_CONFIG = sdl-config
-SLIRP_INC =
-SLIRP_LIB = -lslirp
 
-CFLAGS = -I . -Wall -O3 -ffunction-sections -fdata-sections -g -Wl,--gc-sections ${SLIRP_INC}
+CFLAGS = -I . -Wall -O3 -ffunction-sections -fdata-sections -g
 CFLAGS += -DI386_ENABLE_MMX
 CFLAGS_SDL = ${CFLAGS} `${SDL_CONFIG} --cflags`
 
@@ -16,8 +14,8 @@ LDFLAGS_ =
 LDFLAGS_win32 = -mconsole
 LDFLAGS = ${LDFLAGS_${PLAT}}
 
-LIBS_ = -lm ${SLIRP_LIB}
-LIBS_win32 = -lm ${SLIRP_LIB} -lws2_32 -liphlpapi
+LIBS_ = -lm
+LIBS_win32 = -lm -lws2_32 -liphlpapi
 LIBS = ${LIBS_${PLAT}}
 
 LIBS_SDL_ = `${SDL_CONFIG} --libs` ${LIBS}
@@ -42,7 +40,7 @@ PROGS_ = tiny386 tiny386_nosdl tiny386_kvm wifikbd initnet
 PROGS_win32 = tiny386 tiny386_nosdl wifikbd
 PROGS = ${PROGS_${PLAT}}
 
-SRCS = ini.c i386.c fpu.c i8259.c i8254.c ide.c vga.c i8042.c misc.c fmopl.c adlib.c ne2000.c i8257.c sb16.c pcspk.c
+SRCS = ini.c i386.c fpu.c i8259.c i8254.c disk.c vga.c i8042.c misc.c fmopl.c adlib.c i8257.c sb16.c pcspk.c
 SRCS += pci.c
 SRCS += win32.c
 # OSD

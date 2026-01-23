@@ -65,4 +65,41 @@ void cpu_setflags(CPUI386 *cpu, uword set_mask, uword clear_mask);
 uword cpu_getflags(CPUI386 *cpu);
 void cpu_abort(CPUI386 *cpu, int code);
 
+// Register accessors for disk/BIOS emulation
+// 8-bit registers
+u8 cpu_get_al(CPUI386 *cpu);
+u8 cpu_get_ah(CPUI386 *cpu);
+u8 cpu_get_bl(CPUI386 *cpu);
+u8 cpu_get_bh(CPUI386 *cpu);
+u8 cpu_get_cl(CPUI386 *cpu);
+u8 cpu_get_ch(CPUI386 *cpu);
+u8 cpu_get_dl(CPUI386 *cpu);
+u8 cpu_get_dh(CPUI386 *cpu);
+void cpu_set_al(CPUI386 *cpu, u8 val);
+void cpu_set_ah(CPUI386 *cpu, u8 val);
+void cpu_set_bl(CPUI386 *cpu, u8 val);
+void cpu_set_bh(CPUI386 *cpu, u8 val);
+void cpu_set_cl(CPUI386 *cpu, u8 val);
+void cpu_set_ch(CPUI386 *cpu, u8 val);
+void cpu_set_dl(CPUI386 *cpu, u8 val);
+void cpu_set_dh(CPUI386 *cpu, u8 val);
+// 16-bit registers
+u16 cpu_get_bx(CPUI386 *cpu);
+u16 cpu_get_cx(CPUI386 *cpu);
+u16 cpu_get_dx(CPUI386 *cpu);
+u16 cpu_get_es(CPUI386 *cpu);
+void cpu_set_bx(CPUI386 *cpu, u16 val);
+void cpu_set_cx(CPUI386 *cpu, u16 val);
+void cpu_set_dx(CPUI386 *cpu, u16 val);
+// Carry flag
+void cpu_set_cf(CPUI386 *cpu, int val);
+int cpu_get_cf(CPUI386 *cpu);
+// Physical memory access
+u8 *cpu_get_phys_mem(CPUI386 *cpu);
+long cpu_get_phys_mem_size(CPUI386 *cpu);
+
+// INT 13h disk handler callback
+typedef void (*int13_handler_t)(CPUI386 *cpu, void *opaque);
+void cpu_set_int13_handler(CPUI386 *cpu, int13_handler_t handler, void *opaque);
+
 #endif /* I386_H */

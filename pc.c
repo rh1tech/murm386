@@ -47,20 +47,13 @@ static u8 pc_io_read(void *o, int addr)
 	case 0x70: case 0x71:
 		val = cmos_ioport_read(pc->cmos, addr);
 		return val;
+	/* IDE ports removed - using INT 13h disk handler instead */
 	case 0x1f0: case 0x1f1: case 0x1f2: case 0x1f3:
 	case 0x1f4: case 0x1f5: case 0x1f6: case 0x1f7:
-		val = ide_ioport_read(pc->ide, addr - 0x1f0);
-		return val;
 	case 0x170: case 0x171: case 0x172: case 0x173:
 	case 0x174: case 0x175: case 0x176: case 0x177:
-		val = ide_ioport_read(pc->ide2, addr - 0x170);
-		return val;
-	case 0x3f6:
-		val = ide_status_read(pc->ide);
-		return val;
-	case 0x376:
-		val = ide_status_read(pc->ide2);
-		return val;
+	case 0x3f6: case 0x376:
+		return 0xff;
 	case 0x3c0: case 0x3c1: case 0x3c2: case 0x3c3:
 	case 0x3c4: case 0x3c5: case 0x3c6: case 0x3c7:
 	case 0x3c8: case 0x3c9: case 0x3ca: case 0x3cb:
@@ -89,22 +82,20 @@ static u8 pc_io_read(void *o, int addr)
 	case 0xcfc: case 0xcfd: case 0xcfe: case 0xcff:
 		val = i440fx_read_data(pc->i440fx, addr - 0xcfc, 0);
 		return val;
+	/* NE2000 networking removed */
 	case 0x300: case 0x301: case 0x302: case 0x303:
 	case 0x304: case 0x305: case 0x306: case 0x307:
 	case 0x308: case 0x309: case 0x30a: case 0x30b:
 	case 0x30c: case 0x30d: case 0x30e: case 0x30f:
-		val = ne2000_ioport_read(pc->ne2000, addr);
-		return val;
-	case 0x310:
-		val = ne2000_asic_ioport_read(pc->ne2000, addr);
-		return val;
-	case 0x31f:
-		val = ne2000_reset_ioport_read(pc->ne2000, addr);
-		return val;
+	case 0x310: case 0x31f:
+		return 0xff;
 	case 0x00: case 0x01: case 0x02: case 0x03:
 	case 0x04: case 0x05: case 0x06: case 0x07:
 		val = i8257_read_chan(pc->isa_dma, addr - 0x00, 1);
 		return val;
+	/* Emulink ports removed - using INT 13h disk handler instead */
+	case 0xf1f4:
+		return 0xff;
 	case 0x08: case 0x09: case 0x0a: case 0x0b:
 	case 0x0c: case 0x0d: case 0x0e: case 0x0f:
 		val = i8257_read_cont(pc->isa_dma, addr - 0x08, 1);
@@ -135,10 +126,6 @@ static u8 pc_io_read(void *o, int addr)
 	case 0x226: case 0x22a: case 0x22c: case 0x22d: case 0x22e: case 0x22f:
 		val = sb16_dsp_read(pc->sb16, addr);
 		return val;
-	case 0xf1f4:
-		val = 0;
-		emulink_data_read_string(pc->emulink, &val, 1, 1);
-		return val;
 	default:
 		//fprintf(stderr, "in 0x%x <= 0x%x\n", addr, 0xff);
 		return 0xff;
@@ -154,21 +141,18 @@ static u16 pc_io_read16(void *o, int addr)
 	case 0x1ce: case 0x1cf:
 		val = vbe_read(pc->vga, addr - 0x1ce);
 		return val;
-	case 0x1f0:
-		val = ide_data_readw(pc->ide);
-		return val;
-	case 0x170:
-		val = ide_data_readw(pc->ide2);
-		return val;
+	/* IDE ports removed - using INT 13h disk handler instead */
+	case 0x1f0: case 0x170:
+		return 0xffff;
 	case 0xcf8:
 		val = i440fx_read_addr(pc->i440fx, 0, 1);
 		return val;
 	case 0xcfc: case 0xcfe:
 		val = i440fx_read_data(pc->i440fx, addr - 0xcfc, 1);
 		return val;
+	/* NE2000 networking removed */
 	case 0x310:
-		val = ne2000_asic_ioport_read(pc->ne2000, addr);
-		return val;
+		return 0xffff;
 	case 0x220:
 		return adlib_read(pc->adlib, addr);
 	default:
@@ -182,12 +166,9 @@ static u32 pc_io_read32(void *o, int addr)
 	PC *pc = o;
 	u32 val;
 	switch(addr) {
-	case 0x1f0:
-		val = ide_data_readl(pc->ide);
-		return val;
-	case 0x170:
-		val = ide_data_readl(pc->ide2);
-		return val;
+	/* IDE ports removed - using INT 13h disk handler instead */
+	case 0x1f0: case 0x170:
+		return 0xffffffff;
 	case 0x3cc:
 		return (get_uticks() - pc->boot_start_time) / 1000;
 	case 0xcf8:
@@ -196,9 +177,9 @@ static u32 pc_io_read32(void *o, int addr)
 	case 0xcfc:
 		val = i440fx_read_data(pc->i440fx, 0, 2);
 		return val;
+	/* Emulink removed - using INT 13h disk handler instead */
 	case 0xf1f0:
-		val = emulink_status_read(pc->emulink);
-		return val;
+		return 0xffffffff;
 	default:
 		fprintf(stderr, "ind 0x%x <= 0x%x\n", addr, 0xffffffff);
 	}
@@ -207,15 +188,12 @@ static u32 pc_io_read32(void *o, int addr)
 
 static int pc_io_read_string(void *o, int addr, uint8_t *buf, int size, int count)
 {
-	PC *pc = o;
-	switch(addr) {
-	case 0x1f0:
-		return ide_data_read_string(pc->ide, buf, size, count);
-	case 0x170:
-		return ide_data_read_string(pc->ide2, buf, size, count);
-	case 0xf1f4:
-		return emulink_data_read_string(pc->emulink, buf, size, count);
-	}
+	(void)o;
+	/* IDE and Emulink removed - using INT 13h disk handler instead */
+	(void)addr;
+	(void)buf;
+	(void)size;
+	(void)count;
 	return 0;
 }
 
@@ -246,19 +224,12 @@ static void pc_io_write(void *o, int addr, u8 val)
 	case 0x70: case 0x71:
 		cmos_ioport_write(pc->cmos, addr, val);
 		return;
+	/* IDE ports removed - using INT 13h disk handler instead */
 	case 0x1f0: case 0x1f1: case 0x1f2: case 0x1f3:
 	case 0x1f4: case 0x1f5: case 0x1f6: case 0x1f7:
-		ide_ioport_write(pc->ide, addr - 0x1f0, val);
-		return;
 	case 0x170: case 0x171: case 0x172: case 0x173:
 	case 0x174: case 0x175: case 0x176: case 0x177:
-		ide_ioport_write(pc->ide2, addr - 0x170, val);
-		return;
-	case 0x3f6:
-		ide_cmd_write(pc->ide, val);
-		return;
-	case 0x376:
-		ide_cmd_write(pc->ide2, val);
+	case 0x3f6: case 0x376:
 		return;
 	case 0x3c0: case 0x3c1: case 0x3c2: case 0x3c3:
 	case 0x3c4: case 0x3c5: case 0x3c6: case 0x3c7:
@@ -307,17 +278,12 @@ static void pc_io_write(void *o, int addr, u8 val)
 	case 0xcfc: case 0xcfd: case 0xcfe: case 0xcff:
 		i440fx_write_data(pc->i440fx, addr - 0xcfc, val, 0);
 		return;
+	/* NE2000 networking removed */
 	case 0x300: case 0x301: case 0x302: case 0x303:
 	case 0x304: case 0x305: case 0x306: case 0x307:
 	case 0x308: case 0x309: case 0x30a: case 0x30b:
 	case 0x30c: case 0x30d: case 0x30e: case 0x30f:
-		ne2000_ioport_write(pc->ne2000, addr, val);
-		return;
-	case 0x310:
-		ne2000_asic_ioport_write(pc->ne2000, addr, val);
-		return;
-	case 0x31f:
-		ne2000_reset_ioport_write(pc->ne2000, addr, val);
+	case 0x310: case 0x31f:
 		return;
 	case 0x00: case 0x01: case 0x02: case 0x03:
 	case 0x04: case 0x05: case 0x06: case 0x07:
@@ -356,8 +322,8 @@ static void pc_io_write(void *o, int addr, u8 val)
 	case 0x226: case 0x22c:
 		sb16_dsp_write(pc->sb16, addr, val);
 		return;
+	/* Emulink removed - using INT 13h disk handler instead */
 	case 0xf1f4:
-		emulink_data_write_string(pc->emulink, &val, 1, 1);
 		return;
 	default:
 		fprintf(stderr, "out 0x%x => 0x%x\n", val, addr);
@@ -369,11 +335,8 @@ static void pc_io_write16(void *o, int addr, u16 val)
 {
 	PC *pc = o;
 	switch(addr) {
-	case 0x1f0:
-		ide_data_writew(pc->ide, val);
-		return;
-	case 0x170:
-		ide_data_writew(pc->ide2, val);
+	/* IDE ports removed - using INT 13h disk handler instead */
+	case 0x1f0: case 0x170:
 		return;
 	case 0x3c0: case 0x3c1: case 0x3c2: case 0x3c3:
 	case 0x3c4: case 0x3c5: case 0x3c6: case 0x3c7:
@@ -392,8 +355,8 @@ static void pc_io_write16(void *o, int addr, u16 val)
 	case 0xcfc: case 0xcfe:
 		i440fx_write_data(pc->i440fx, addr - 0xcfc, val, 1);
 		return;
+	/* NE2000 networking removed */
 	case 0x310:
-		ne2000_asic_ioport_write(pc->ne2000, addr, val);
 		return;
 	default:
 		fprintf(stderr, "outw 0x%x => 0x%x\n", val, addr);
@@ -405,11 +368,8 @@ static void pc_io_write32(void *o, int addr, u32 val)
 {
 	PC *pc = o;
 	switch(addr) {
-	case 0x1f0:
-		ide_data_writel(pc->ide, val);
-		return;
-	case 0x170:
-		ide_data_writel(pc->ide2, val);
+	/* IDE ports removed - using INT 13h disk handler instead */
+	case 0x1f0: case 0x170:
 		return;
 	case 0xcf8:
 		i440fx_write_addr(pc->i440fx, 0, val, 2);
@@ -417,11 +377,8 @@ static void pc_io_write32(void *o, int addr, u32 val)
 	case 0xcfc:
 		i440fx_write_data(pc->i440fx, 0, val, 2);
 		return;
-	case 0xf1f0:
-		emulink_cmd_write(pc->emulink, val);
-		return;
-	case 0xf1f4:
-		emulink_data_write(pc->emulink, val);
+	/* Emulink removed - using INT 13h disk handler instead */
+	case 0xf1f0: case 0xf1f4:
 		return;
 	default:
 		fprintf(stderr, "outd 0x%x => 0x%x\n", val, addr);
@@ -431,15 +388,8 @@ static void pc_io_write32(void *o, int addr, u32 val)
 
 static int pc_io_write_string(void *o, int addr, uint8_t *buf, int size, int count)
 {
-	PC *pc = o;
-	switch(addr) {
-	case 0x1f0:
-		return ide_data_write_string(pc->ide, buf, size, count);
-	case 0x170:
-		return ide_data_write_string(pc->ide2, buf, size, count);
-	case 0xf1f4:
-		return emulink_data_write_string(pc->emulink, buf, size, count);
-	}
+	(void)o; (void)addr; (void)buf; (void)size; (void)count;
+	/* IDE and emulink removed - using INT 13h disk handler instead */
 	return 0;
 }
 
@@ -477,10 +427,7 @@ void pc_step(PC *pc)
 	if (pc_step_debug) printf("pc_step: serial done\n");
 	kbd_step(pc->i8042);
 	if (pc_step_debug) printf("pc_step: kbd done\n");
-#ifndef RP2350_BUILD
-	ne2000_step(pc->ne2000);
-	if (pc_step_debug) printf("pc_step: ne2000 done\n");
-#endif
+	/* NE2000 networking removed */
 	i8257_dma_run(pc->isa_dma);
 	i8257_dma_run(pc->isa_hdma);
 	if (pc_step_debug) printf("pc_step: dma done\n");
@@ -684,34 +631,25 @@ PC *pc_new(SimpleFBDrawFunc *redraw, void (*poll)(void *), void *redraw_data,
 	pc->pit = i8254_init(0, pc->pic, set_irq);
 	pc->serial = u8250_init(4, pc->pic, set_irq);
 	pc->cmos = cmos_init(conf->mem_size, 8, pc->pic, set_irq);
-	pc->ide = ide_allocate(14, pc->pic, set_irq);
-	pc->ide2 = ide_allocate(15, pc->pic, set_irq);
+
+	/* Set up INT 13h disk handler */
+	disk_set_cpu(pc->cpu);
+	cpu_set_int13_handler(pc->cpu, diskhandler_wrapper, NULL);
+
+	/* Attach hard disks using INT 13h disk handler */
 	const char **disks = conf->disks;
 	for (int i = 0; i < 4; i++) {
 		if (!disks[i] || disks[i][0] == 0)
 			continue;
-		int ret;
-		if (i < 2) {
-			if (conf->iscd[i])
-				ret = ide_attach_cd(pc->ide, i, disks[i]);
-			else
-				ret = ide_attach(pc->ide, i, disks[i]);
-			if (ret != 0) continue;  // Skip if attach fails
-		} else {
-			if (conf->iscd[i])
-				ret = ide_attach_cd(pc->ide2, i - 2, disks[i]);
-			else
-				ret = ide_attach(pc->ide2, i - 2, disks[i]);
-			if (ret != 0) continue;  // Skip if attach fails
-		}
+		/* Map disk index: 0,1 -> hard drives 0x80,0x81 (drivenum 2,3) */
+		/* Note: pico-286 disk handler uses drivenum 2,3 for hard disks */
+		uint8_t drivenum = (i < 2) ? (0x80 + i) : (0x80 + i);
+		insertdisk(drivenum, disks[i]);
 	}
-
-	if (conf->fill_cmos)
-		ide_fill_cmos(pc->ide, pc->cmos, cmos_set);
 
 	int piix3_devfn;
 	pc->i440fx = i440fx_init(&pc->pcibus, &piix3_devfn);
-	pc->pci_ide = piix3_ide_init(pc->pcibus, piix3_devfn + 1);
+	/* PCI IDE removed - using INT 13h disk handler instead */
 
 	pc->phys_mem = mem;
 	pc->phys_mem_size = conf->mem_size;
@@ -737,12 +675,13 @@ PC *pc_new(SimpleFBDrawFunc *redraw, void (*poll)(void *), void *redraw_data,
 	pc->pci_vga = vga_pci_init(pc->vga, pc->pcibus, pc, set_pci_vga_bar);
 	pc->pci_vga_ram_addr = -1;
 
-	pc->emulink = emulink_init();
+	/* Attach floppy disks using INT 13h disk handler */
 	const char **fdd = conf->fdd;
 	for (int i = 0; i < 2; i++) {
 		if (!fdd[i] || fdd[i][0] == 0)
 			continue;
-		emulink_attach_floppy(pc->emulink, i, fdd[i]);
+		/* Floppy drives use drivenum 0 and 1 */
+		insertdisk(i, fdd[i]);
 	}
 
 	cb->iomem = pc;
@@ -762,11 +701,7 @@ PC *pc_new(SimpleFBDrawFunc *redraw, void (*poll)(void *), void *redraw_data,
 			       1, 12, pc->pic, set_irq,
 			       pc, pc_reset_request);
 	pc->adlib = adlib_new();
-#ifndef RP2350_BUILD
-	pc->ne2000 = isa_ne2000_init(0x300, 9, pc->pic, set_irq);
-#else
-	pc->ne2000 = NULL;  // Disabled on RP2350 - no networking
-#endif
+	/* NE2000 networking removed */
 	pc->isa_dma = i8257_new(pc->phys_mem, pc->phys_mem_size,
 				0x00, 0x80, 0x480, 0);
 	pc->isa_hdma = i8257_new(pc->phys_mem, pc->phys_mem_size,
