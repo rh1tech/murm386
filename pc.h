@@ -8,12 +8,11 @@
 #include "i386.h"
 #include "i8259.h"
 #include "i8254.h"
-#include "ide.h"
+#include "disk.h"
 #include "vga.h"
 #include "i8042.h"
 #include "misc.h"
 #include "adlib.h"
-#include "ne2000.h"
 #include "i8257.h"
 #include "sb16.h"
 #include "pcspk.h"
@@ -40,7 +39,6 @@ typedef struct {
 	PITState *pit;
 	U8250 *serial;
 	CMOS *cmos;
-	IDEIFState *ide, *ide2;
 	VGAState *vga;
 	char *phys_mem;
 	long phys_mem_size;
@@ -56,18 +54,14 @@ typedef struct {
 	PS2KbdState *kbd;
 	PS2MouseState *mouse;
 	AdlibState *adlib;
-	NE2000State *ne2000;
 	I8257State *isa_dma, *isa_hdma;
 	SB16State *sb16;
 	PCSpkState *pcspk;
 
 	I440FXState *i440fx;
 	PCIBus *pcibus;
-	PCIDevice *pci_ide;
 	PCIDevice *pci_vga;
 	uword pci_vga_ram_addr;
-
-	EMULINK *emulink;
 
 	const char *bios;
 	const char *vga_bios;

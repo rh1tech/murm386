@@ -249,8 +249,7 @@ static void poll(void *opaque)
 			keycode = sdl_get_keycode(&(ev.key));
 			if (keycode == 0x1a && key_pressed[0x1d]) {
 				s->osd_enabled = !s->osd_enabled;
-				osd_attach_emulink(s->osd, s->pc->emulink);
-				osd_attach_ide(s->osd, s->pc->ide, s->pc->ide2);
+				/* IDE and emulink removed - OSD disk functions use INT 13h handler */
 				s->pc->full_update = s->osd_enabled ? 1 : 2;
 				break;
 			}

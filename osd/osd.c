@@ -7,23 +7,22 @@
 
 #include "../vga.h" // XXX: for BPP definition
 
-#include "../misc.h"
-#include "../ide.h"
+#include "../disk.h"
 
 struct OSD {
 	mu_Context ctx;
-	EMULINK *emulink;
-	IDEIFState *ide, *ide2;
 	void *console;
 };
 
 static void do_window(mu_Context *ctx, struct OSD *osd)
 {
+	(void)osd;
 	if (mu_begin_window_ex(ctx, "Tiny386 Control Panel",
 			       mu_rect(40, 40, 320, 240),
 			       MU_OPT_NOCLOSE)) {
 		static char buf[2][128];
 		mu_layout_row(ctx, 3, (int[]) { 54, -70, -1 }, 0);
+		/* Floppy disk hotswap using INT 13h disk handler */
 		for (int i = 0; i < 2; i++) {
 			mu_push_id(ctx, &i, sizeof(i));
 			char label[4] = "fd ";
@@ -33,35 +32,28 @@ static void do_window(mu_Context *ctx, struct OSD *osd)
 //				mu_set_focus(ctx, ctx->last_id);
 			}
 			if (mu_button(ctx, "Submit")) {
-				if (osd->emulink) {
-					if (buf[i][0] == 0)
-						emulink_attach_floppy(osd->emulink, i, NULL);
-					else
-						emulink_attach_floppy(osd->emulink, i, buf[i]);
-				}
+				/* Use INT 13h disk handler - floppy drives are 0 and 1 */
+				if (buf[i][0] != 0)
+					insertdisk(i, buf[i]);
 			}
 			mu_pop_id(ctx);
 		}
 
+		/* Hard disk hotswap using INT 13h disk handler */
 		static char buf2[4][128];
 		for (int i = 0; i < 4; i++) {
 			int iid = 2 + i;
 			mu_push_id(ctx, &iid, sizeof(iid));
-			char label[4] = "cd ";
+			char label[4] = "hd ";
 			label[2] = 'a' + i;
 			mu_label(ctx, label);
 			if (mu_textbox(ctx, buf2[i], sizeof(buf2[0])) & MU_RES_SUBMIT) {
 //				mu_set_focus(ctx, ctx->last_id);
 			}
 			if (mu_button(ctx, "Submit")) {
-				IDEIFState *ide;
-				if (i < 2) {
-					ide = osd->ide;
-				} else {
-					ide = osd->ide2;
-				}
-				if (ide)
-					ide_change_cd(ide, i % 2, buf2[i]);
+				/* Use INT 13h disk handler - hard drives are 0x80+ */
+				if (buf2[i][0] != 0)
+					insertdisk(0x80 + i, buf2[i]);
 			}
 			mu_pop_id(ctx);
 		}
@@ -294,8 +286,6 @@ static void render(mu_Context *ctx,
 OSD *osd_init()
 {
 	OSD *osd = malloc(sizeof(OSD));
-	osd->emulink = NULL;
-	osd->ide = osd->ide2 = NULL;
 	osd->console = NULL;
 	mu_init(&(osd->ctx));
 	osd->ctx.text_height = text_height;
@@ -303,16 +293,7 @@ OSD *osd_init()
 	return osd;
 }
 
-void osd_attach_emulink(OSD *osd, void *emulink)
-{
-	osd->emulink = emulink;
-}
-
-void osd_attach_ide(OSD *osd, void *ide, void *ide2)
-{
-	osd->ide = ide;
-	osd->ide2 = ide2;
-}
+/* IDE and emulink removed - disk hotswap uses INT 13h disk handler directly */
 
 void osd_attach_console(OSD *osd, void *console)
 {

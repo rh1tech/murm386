@@ -115,6 +115,10 @@ struct CPUI386 {
 	struct {
 		uword cs, eip, esp;
 	} sysenter;
+
+	/* INT 13h disk handler hook */
+	void (*int13_handler)(struct CPUI386 *cpu, void *opaque);
+	void *int13_opaque;
 };
 
 #define dolog(...) fprintf(stderr, __VA_ARGS__)
@@ -4393,6 +4397,12 @@ static int __call_isr_check_cs(CPUI386 *cpu, int sel, int ext, int *csdpl)
 
 static bool IRAM_ATTR call_isr(CPUI386 *cpu, int no, bool pusherr, int ext)
 {
+	/* INT 13h disk handler hook - intercept in real mode */
+	if (no == 0x13 && cpu->int13_handler && !(cpu->cr0 & 1)) {
+		cpu->int13_handler(cpu, cpu->int13_opaque);
+		return true;
+	}
+
 	if (!(cpu->cr0 & 1)) {
 		/* REAL-ADDRESS-MODE */
 		uword sp_mask = cpu->seg[SEG_SS].flags & SEG_B_BIT ? 0xffffffff : 0xffff;
@@ -5127,4 +5137,62 @@ static void cpu_debug(CPUI386 *cpu)
 	cpu->excno = excno;
 	cpu->excerr = excerr;
 	nest--;
+}
+
+// Register accessors for disk/BIOS emulation
+u8 cpu_get_al(CPUI386 *cpu) { return lreg8(0); }
+u8 cpu_get_ah(CPUI386 *cpu) { return lreg8(4); }
+u8 cpu_get_bl(CPUI386 *cpu) { return lreg8(3); }
+u8 cpu_get_bh(CPUI386 *cpu) { return lreg8(7); }
+u8 cpu_get_cl(CPUI386 *cpu) { return lreg8(1); }
+u8 cpu_get_ch(CPUI386 *cpu) { return lreg8(5); }
+u8 cpu_get_dl(CPUI386 *cpu) { return lreg8(2); }
+u8 cpu_get_dh(CPUI386 *cpu) { return lreg8(6); }
+
+void cpu_set_al(CPUI386 *cpu, u8 val) { sreg8(0, val); }
+void cpu_set_ah(CPUI386 *cpu, u8 val) { sreg8(4, val); }
+void cpu_set_bl(CPUI386 *cpu, u8 val) { sreg8(3, val); }
+void cpu_set_bh(CPUI386 *cpu, u8 val) { sreg8(7, val); }
+void cpu_set_cl(CPUI386 *cpu, u8 val) { sreg8(1, val); }
+void cpu_set_ch(CPUI386 *cpu, u8 val) { sreg8(5, val); }
+void cpu_set_dl(CPUI386 *cpu, u8 val) { sreg8(2, val); }
+void cpu_set_dh(CPUI386 *cpu, u8 val) { sreg8(6, val); }
+
+u16 cpu_get_bx(CPUI386 *cpu) { return lreg16(3); }
+u16 cpu_get_cx(CPUI386 *cpu) { return lreg16(1); }
+u16 cpu_get_dx(CPUI386 *cpu) { return lreg16(2); }
+u16 cpu_get_es(CPUI386 *cpu) { return cpu->seg[SEG_ES].sel; }
+
+void cpu_set_bx(CPUI386 *cpu, u16 val) { sreg16(3, val); }
+void cpu_set_cx(CPUI386 *cpu, u16 val) { sreg16(1, val); }
+void cpu_set_dx(CPUI386 *cpu, u16 val) { sreg16(2, val); }
+
+void cpu_set_cf(CPUI386 *cpu, int val)
+{
+	if (cpu->cc.mask & CF) {
+		refresh_flags(cpu);
+		cpu->cc.mask = 0;
+	}
+	if (val)
+		cpu->flags |= CF;
+	else
+		cpu->flags &= ~CF;
+}
+
+int cpu_get_cf(CPUI386 *cpu)
+{
+	if (cpu->cc.mask & CF) {
+		refresh_flags(cpu);
+		cpu->cc.mask = 0;
+	}
+	return (cpu->flags & CF) ? 1 : 0;
+}
+
+u8 *cpu_get_phys_mem(CPUI386 *cpu) { return cpu->phys_mem; }
+long cpu_get_phys_mem_size(CPUI386 *cpu) { return cpu->phys_mem_size; }
+
+void cpu_set_int13_handler(CPUI386 *cpu, int13_handler_t handler, void *opaque)
+{
+	cpu->int13_handler = handler;
+	cpu->int13_opaque = opaque;
 }

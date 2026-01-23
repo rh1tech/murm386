@@ -60,6 +60,14 @@ static void poll(void *opaque)
 {
 }
 
+/* Stub for OSD keyboard support (not used in headless mode) */
+void console_send_kbd(void *opaque, int keypress, int keycode)
+{
+	(void)opaque;
+	(void)keypress;
+	(void)keycode;
+}
+
 int main(int argc, char *argv[])
 {
 	PCConfig conf;

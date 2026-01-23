@@ -5,8 +5,7 @@
 
 typedef struct OSD OSD;
 OSD *osd_init();
-void osd_attach_emulink(OSD *osd, void *emulink);
-void osd_attach_ide(OSD *osd, void *ide, void *ide2);
+/* IDE and emulink removed - disk hotswap uses INT 13h disk handler directly */
 void osd_attach_console(OSD *osd, void *);
 void osd_handle_mouse_motion(OSD *osd, int x, int y);
 void osd_handle_mouse_button(OSD *osd, int x, int y, int down, int btn);
