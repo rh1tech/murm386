@@ -1216,6 +1216,10 @@ static int write_audio (SB16State *s, int nchan, int dma_pos,
         net += copied;
 
         if (!copied) {
+#if defined(RP2350_BUILD) || defined(BUILD_ESP32)
+            // Buffer full: release DREQ to stop DMA spinning
+            i8257_dma_release_DREQ(isa_dma, nchan);
+#endif
             break;
         }
     }
@@ -1239,10 +1243,15 @@ static int SB_read_DMA (void *opaque, int nchan, int dma_pos, int dma_len)
     }
 
     if (s->voice) {
+        // RP2350/ESP32: Ignore audio_free, fill buffer as much as possible
+#if !defined(RP2350_BUILD) && !defined(BUILD_ESP32)
         free = s->audio_free & ~s->align;
         if ((free <= 0) || !dma_len) {
             return dma_pos;
         }
+#else
+        free = dma_len;
+#endif
     }
     else {
         free = dma_len;
@@ -1518,6 +1527,15 @@ void sb16_audio_callback (void *opaque, uint8_t *stream, int free)
         dolog("bad format %d\n", s->fmt);
         s->audio_p = s->audio_q;
     }
+
+#if defined(RP2350_BUILD) || defined(BUILD_ESP32)
+        // Buffer space available: re-assert DREQ if DMA is active
+        if (s->dma_running) {
+            int dma = s->use_hdma ? s->hdma : s->dma;
+            IsaDma *isa_dma = s->use_hdma ? s->isa_hdma : s->isa_dma;
+            i8257_dma_hold_DREQ(isa_dma, dma);
+        }
+#endif
 }
 
 #if 0
