@@ -273,11 +273,18 @@ void i8254_update_irq(PITState *pit)
 	switch(s->mode) {
 	case 2:
 	case 3:
+		/* if d >= last_irq_count + count */
 		if (s->last_irq_count + s->count - d >= 0x80000000) {
-			if (s->irq != -1) {
-				pit->set_irq(pit->pic, s->irq, 1);
-				pit->set_irq(pit->pic, s->irq, 0);
+			int i = 0;
+			/* we loop to catch up, but not too much to avoid freezing
+			   (maximum 10 interrupts per update) */
+			while (s->last_irq_count + s->count - d >= 0x80000000 && i < 10) {
+				if (s->irq != -1) {
+					pit->set_irq(pit->pic, s->irq, 1);
+					pit->set_irq(pit->pic, s->irq, 0);
+				}
 				s->last_irq_count += s->count;
+				i++;
 			}
 		}
 		break;
