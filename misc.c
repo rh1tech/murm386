@@ -10,6 +10,7 @@
 #include "pico/stdlib.h"
 #include "platform_rp2350.h"
 #include "ff.h"  // FatFS for SD card access
+#include "debug.h"
 #ifndef EIO
 #define EIO 5
 #endif
@@ -248,7 +249,7 @@ void u8250_reg_write(U8250 *uart, int off, uint8_t val)
 			do {
 				r = write(uart->out_fd, &val, 1);
 			} while (r == -1 && errno == EINTR);
-#else
+#elif defined(DEBUG_ENABLED)
 			putchar(val);
 #endif
 		}
