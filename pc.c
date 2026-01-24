@@ -14,10 +14,44 @@
 #define cpu_get_cycle cpui386_get_cycle
 #endif
 
+/* Debug: I/O port access tracing to identify polling loops
+ * Set IO_TRACE_ENABLED to 1 to enable, 0 to disable */
+#define IO_TRACE_ENABLED 1
+
+#if IO_TRACE_ENABLED
+static uint32_t io_read_count = 0;
+static int io_last_port = -1;
+static uint32_t io_last_port_count = 0;
+#define IO_TRACE_INTERVAL 500000  /* Print every N reads */
+
+static void io_trace_read(int addr) {
+	io_read_count++;
+	if (addr == io_last_port) {
+		io_last_port_count++;
+	} else {
+		io_last_port = addr;
+		io_last_port_count = 1;
+	}
+	/* Print if same port polled many times or at interval */
+	if (io_last_port_count == 10000) {
+		printf("[IO_TRACE] Port 0x%03x polled 10000 times - possible hang\n", addr);
+	}
+	if ((io_read_count % IO_TRACE_INTERVAL) == 0) {
+		printf("[IO_TRACE] %u reads, last port=0x%03x (count=%u)\n",
+		       io_read_count, io_last_port, io_last_port_count);
+	}
+}
+#define IO_TRACE_READ(addr) io_trace_read(addr)
+#else
+#define IO_TRACE_READ(addr)
+#endif
+
 static u8 pc_io_read(void *o, int addr)
 {
 	PC *pc = o;
 	u8 val;
+
+	IO_TRACE_READ(addr);
 
 	switch(addr) {
 	case 0x20: case 0x21: case 0xa0: case 0xa1:
