@@ -119,6 +119,7 @@ static uint8_t cga_palette[4];
 
 // Current video mode (0=blank, 1=text, 2=graphics)
 static int current_mode = 1;  // Default text mode
+static volatile int pending_mode = -1;  // Pending mode change (-1 = none)
 
 // Graphics sub-mode: 1=CGA, 2=EGA planar, 3=VGA 256-color
 static int gfx_submode = 3;
@@ -591,30 +592,29 @@ static void __isr __time_critical_func(dma_handler_vga)(void) {
     
     // At start of vblank (end of active video), swap buffers if write is done
     if (current_line == N_LINES_VISIBLE) {
-        // Snapshot vram_offset for next frame's copy
-        // Note: We now use pending_start_addr directly in vga_hw_update
-        // But we still need these for the ISR to render the CURRENT frame correctly?
-        // No, the ISR renders from gfx_display_buffer which was already copied.
-        // The ISR doesn't use vram_offset directly, it uses the buffer.
-        // BUT, it DOES use pixel_panning for fine scrolling!
-        // So we MUST update frame_pixel_panning here from the values used to generate the buffer.
-        // Wait, if we update pixel_panning in vga_hw_update, it might change mid-frame?
-        // No, vga_hw_update updates the global 'pixel_panning' variable.
-        // The ISR snapshots it here into 'frame_pixel_panning'.
-        // This ensures the panning matches the buffer being displayed.
-        
+        // Apply pending mode change during vblank (safe time to switch)
+        if (pending_mode >= 0) {
+            current_mode = pending_mode;
+            pending_mode = -1;
+            // Reset graphics buffer state on mode change
+            for (int i = 0; i < GFX_LINE_BUFFER_COUNT; i++) {
+                gfx_buffer_line[i] = 0xFFFFFFFF;
+            }
+            gfx_next_render_line = 0;
+        }
+
         if (gfx_write_done) {
             // Only update frame parameters when we actually swap the buffer!
             // This ensures panning and line_compare match the frame content.
             frame_pixel_panning = pixel_panning;
             frame_line_compare = line_compare;
-            
+
             uint8_t *tmp = gfx_display_buffer;
             gfx_display_buffer = gfx_write_buffer;
             gfx_write_buffer = tmp;
             gfx_write_done = 0;
         }
-        
+
         // Swap palette if dirty
         if (palette_dirty) {
             uint16_t *tmp = active_palette;
@@ -789,12 +789,8 @@ void vga_hw_set_vram(uint8_t *vram) {
 
 void vga_hw_set_mode(int mode) {
     if (mode != current_mode) {
-        current_mode = mode;
-        // Reset graphics buffer state on mode change
-        for (int i = 0; i < GFX_LINE_BUFFER_COUNT; i++) {
-            gfx_buffer_line[i] = 0xFFFFFFFF;
-        }
-        gfx_next_render_line = 0;
+        // Defer mode change to vblank to prevent signal glitches
+        pending_mode = mode;
     }
 }
 
