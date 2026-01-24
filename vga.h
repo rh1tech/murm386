@@ -43,7 +43,7 @@ void vga_get_cursor(VGAState *s, int *x, int *y, int *start, int *end);
 void vga_get_cursor_info(VGAState *s, int *x, int *y, int *start, int *end, int *visible);
 const uint8_t *vga_get_palette(VGAState *s);  // 768-byte RGB palette (256 x 3)
 void vga_get_palette16(VGAState *s, uint8_t *palette16);  // 48-byte EGA palette (16 x 3)
-int vga_get_graphics_mode(VGAState *s, int *width, int *height);  // Returns: 0=text, 1=CGA, 2=EGA, 3=VGA256
+int vga_get_graphics_mode(VGAState *s, int *width, int *height);  // Returns: 0=text, 1=CGA4, 2=EGA, 3=VGA256, 4=CGA2
 int vga_get_line_offset(VGAState *s);    // Line offset in words
 int vga_get_line_compare(VGAState *s);   // Scanline where address resets to 0
 bool vga_in_retrace(VGAState *s);        // Check if in vertical retrace

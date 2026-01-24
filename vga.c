@@ -1026,14 +1026,42 @@ static void vga_graphic_refresh(VGAState *s,
             int x1 = x / xdiv;
             uint32_t color;
             if (shift_control == 0) {
+                static int ega_debug = 0;
+                if (ega_debug < 3 && x == 0 && y == 0) {
+                    printf("[EGA] w=%d h=%d xdiv=%d line_offset=%d addr1=0x%x\n",
+                           w, h, xdiv, line_offset, addr1);
+                    printf("[EGA] cr17=%02x cr09=%02x multi_scan=%d double_scan=%d\n",
+                           s->cr[0x17], s->cr[0x09], multi_scan, double_scan);
+                    printf("[EGA] vram[0..7]=%02x %02x %02x %02x %02x %02x %02x %02x\n",
+                           vram[0], vram[1], vram[2], vram[3], vram[4], vram[5], vram[6], vram[7]);
+                    ega_debug++;
+                }
                 int k = ((vram[addr + 4 * (x1 >> 3)] >> (7 - (x1 & 7))) & 1) << 0;
                 k |= ((vram[addr + 4 * (x1 >> 3) + 1] >> (7 - (x1 & 7))) & 1) << 1;
                 k |= ((vram[addr + 4 * (x1 >> 3) + 2] >> (7 - (x1 & 7))) & 1) << 2;
                 k |= ((vram[addr + 4 * (x1 >> 3) + 3] >> (7 - (x1 & 7))) & 1) << 3;
                 color = palette[k];
             } else if (shift_control == 1) {
-                int k = ((vram[addr + 4 * (x1 >> 3) + ((x1 & 4) >> 2)] >>
+                int k;
+                /* Check if this is CGA 640x200 2-color mode (1bpp) vs 320x200 4-color (2bpp)
+                 * Use original CRTC width to distinguish: 640 = 1bpp, 320 = 2bpp */
+                int crtc_width = (s->cr[0x01] + 1) * 8;
+                static int cga_debug = 0;
+                if (cga_debug < 5 && x == 0 && y == 0) {
+                    printf("[CGA] shift_control=%d crtc_width=%d w=%d xdiv=%d cr17=%02x sr01=%02x\n",
+                           shift_control, crtc_width, w, xdiv, s->cr[0x17], s->sr[0x01]);
+                    cga_debug++;
+                }
+                if (crtc_width >= 640) {
+                    /* CGA mode 6: 640x200, 1 bit per pixel, 8 pixels per byte
+                     * All pixels in plane 0 only, so don't add plane offset */
+                    k = ((vram[addr + 4 * (x1 >> 3)] >> (7 - (x1 & 7))) & 1);
+                } else {
+                    /* CGA mode 4/5: 320x200, 2 bits per pixel, 4 pixels per byte
+                     * Pixels split across planes 0 and 1 */
+                    k = ((vram[addr + 4 * (x1 >> 3) + ((x1 & 4) >> 2)] >>
                           (6 - 2 * (x1 & 3))) & 3);
+                }
                 color = palette[k];
             } else
 #if BPP == 32
@@ -2519,10 +2547,17 @@ int vga_get_graphics_mode(VGAState *s, int *width, int *height)
         ((s->cr[0x07] & 0x40) << 3);
     h++;
 
-    // Handle double-scan and multi-scan
+    // Handle double-scan and multi-scan for height calculation
+    // NOTE: We return the actual source data height, not display height.
+    // The hardware renderer handles vertical doubling itself.
     int double_scan = (s->cr[0x09] >> 7);
+    int multi_scan = 1;
     if (shift_control != 1) {
-        int multi_scan = (((s->cr[0x09] & 0x1f) + 1) << double_scan);
+        multi_scan = (((s->cr[0x09] & 0x1f) + 1) << double_scan);
+    }
+    // Divide by multi_scan to get actual unique scanlines in VRAM
+    // (but only if multi_scan > 1, indicating each source line is scanned multiple times)
+    if (multi_scan > 1) {
         h = (h + multi_scan - 1) / multi_scan;
     }
 
@@ -2541,9 +2576,30 @@ int vga_get_graphics_mode(VGAState *s, int *width, int *height)
         if (s->ar[0x10] & 0x40) {
             return 3; // Treat as VGA 256-color (linear pixels in vga_ram)
         }
+        // Debug: print register values for 640-wide modes
+        static int debug_640 = 0;
+        if (w >= 640 && debug_640 < 3) {
+            printf("[VGA] 640-wide mode: shift=%d gr5=0x%02x gr6=0x%02x cr17=0x%02x\n",
+                   shift_control, s->gr[0x05], s->gr[0x06], s->cr[0x17]);
+            debug_640++;
+        }
+        // Check for CGA graphics modes (memory map = B8000-BFFFF, GR6 bits 2-3 = 11)
+        // Mode 6 uses shift_control=0 with CGA memory mapping
+        if ((s->gr[0x06] & 0x0C) == 0x0C && w >= 640) {
+            return 4;  // CGA 2-color (640x200 monochrome)
+        }
+        // Also check CR17 bit 0 - cleared for CGA compatibility modes
+        if (!(s->cr[0x17] & 0x01) && w >= 640) {
+            return 4;  // CGA 2-color (640x200 monochrome)
+        }
         return 2;  // EGA planar 16-color
     } else if (shift_control == 1) {
-        return 1;  // CGA mode
+        // CGA 4-color modes (320x200)
+        // Also check for 640-wide CGA 2-color in case shift_control varies
+        if (w >= 640) {
+            return 4;  // CGA 2-color (640x200 monochrome)
+        }
+        return 1;  // CGA 4-color (320x200)
     } else {
         return 3;  // VGA 256-color (mode 13h)
     }
