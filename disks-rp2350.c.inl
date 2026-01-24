@@ -2,6 +2,8 @@
  * Disk management for RP2350 - adapted from pico-286
  * Uses FatFS for SD card access
  */
+#include <stdio.h>
+#include <string.h>
 #include <hardware/gpio.h>
 #include "i386.h"
 #include "ff.h"

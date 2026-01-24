@@ -3996,6 +3996,111 @@ GRPEND
 
 	ecase(0x0f): { // two byte
 		TRY(fetch8(cpu, &b1));
+#ifdef I386_OPT2
+		// Computed goto dispatch for 0x0f two-byte opcodes
+		// Note: MMX opcodes (0x60-0x7f, 0xd1-0xdf, 0xe1-0xef, 0xf1-0xfe) included when I386_ENABLE_MMX
+		static const DRAM_ATTR void *pfxlabel_0f[] = {
+/* 0x00 */	&&f0f_0x00, &&f0f_0x01, &&f0f_0x02, &&f0f_0x03, &&f0f_ud, &&f0f_ud, &&f0f_0x06, &&f0f_ud,
+/* 0x08 */	&&f0f_ud, &&f0f_0x09, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud,
+/* 0x10 */	&&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud,
+/* 0x18 */	&&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud,
+/* 0x20 */	&&f0f_0x20, &&f0f_0x21, &&f0f_0x22, &&f0f_0x23, &&f0f_0x24, &&f0f_ud, &&f0f_0x26, &&f0f_ud,
+/* 0x28 */	&&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud,
+/* 0x30 */	&&f0f_0x30, &&f0f_0x31, &&f0f_0x32, &&f0f_ud, &&f0f_0x34, &&f0f_0x35, &&f0f_ud, &&f0f_ud,
+/* 0x38 */	&&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud,
+/* 0x40 */	&&f0f_0x40, &&f0f_0x41, &&f0f_0x42, &&f0f_0x43, &&f0f_0x44, &&f0f_0x45, &&f0f_0x46, &&f0f_0x47,
+/* 0x48 */	&&f0f_0x48, &&f0f_0x49, &&f0f_0x4a, &&f0f_0x4b, &&f0f_0x4c, &&f0f_0x4d, &&f0f_0x4e, &&f0f_0x4f,
+/* 0x50 */	&&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud,
+/* 0x58 */	&&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud,
+#ifdef I386_ENABLE_MMX
+/* 0x60 */	&&f0f_0x60, &&f0f_0x61, &&f0f_0x62, &&f0f_0x63, &&f0f_0x64, &&f0f_0x65, &&f0f_0x66, &&f0f_0x67,
+/* 0x68 */	&&f0f_0x68, &&f0f_0x69, &&f0f_0x6a, &&f0f_0x6b, &&f0f_ud, &&f0f_ud, &&f0f_0x6e, &&f0f_0x6f,
+/* 0x70 */	&&f0f_ud, &&f0f_0x71, &&f0f_0x72, &&f0f_0x73, &&f0f_0x74, &&f0f_0x75, &&f0f_0x76, &&f0f_0x77,
+/* 0x78 */	&&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_0x7e, &&f0f_0x7f,
+#else
+/* 0x60 */	&&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud,
+/* 0x68 */	&&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud,
+/* 0x70 */	&&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud,
+/* 0x78 */	&&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud,
+#endif
+/* 0x80 */	&&f0f_0x80, &&f0f_0x81, &&f0f_0x82, &&f0f_0x83, &&f0f_0x84, &&f0f_0x85, &&f0f_0x86, &&f0f_0x87,
+/* 0x88 */	&&f0f_0x88, &&f0f_0x89, &&f0f_0x8a, &&f0f_0x8b, &&f0f_0x8c, &&f0f_0x8d, &&f0f_0x8e, &&f0f_0x8f,
+/* 0x90 */	&&f0f_0x90, &&f0f_0x91, &&f0f_0x92, &&f0f_0x93, &&f0f_0x94, &&f0f_0x95, &&f0f_0x96, &&f0f_0x97,
+/* 0x98 */	&&f0f_0x98, &&f0f_0x99, &&f0f_0x9a, &&f0f_0x9b, &&f0f_0x9c, &&f0f_0x9d, &&f0f_0x9e, &&f0f_0x9f,
+/* 0xa0 */	&&f0f_0xa0, &&f0f_0xa1, &&f0f_0xa2, &&f0f_0xa3, &&f0f_0xa4, &&f0f_0xa5, &&f0f_ud, &&f0f_ud,
+/* 0xa8 */	&&f0f_0xa8, &&f0f_0xa9, &&f0f_ud, &&f0f_0xab, &&f0f_0xac, &&f0f_0xad, &&f0f_ud, &&f0f_0xaf,
+/* 0xb0 */	&&f0f_0xb0, &&f0f_0xb1, &&f0f_0xb2, &&f0f_0xb3, &&f0f_0xb4, &&f0f_0xb5, &&f0f_0xb6, &&f0f_0xb7,
+/* 0xb8 */	&&f0f_ud, &&f0f_ud, &&f0f_0xba, &&f0f_0xbb, &&f0f_0xbc, &&f0f_0xbd, &&f0f_0xbe, &&f0f_0xbf,
+/* 0xc0 */	&&f0f_0xc0, &&f0f_0xc1, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_0xc7,
+/* 0xc8 */	&&f0f_0xc8, &&f0f_0xc9, &&f0f_0xca, &&f0f_0xcb, &&f0f_0xcc, &&f0f_0xcd, &&f0f_0xce, &&f0f_0xcf,
+#ifdef I386_ENABLE_MMX
+/* 0xd0 */	&&f0f_ud, &&f0f_0xd1, &&f0f_0xd2, &&f0f_0xd3, &&f0f_ud, &&f0f_0xd5, &&f0f_ud, &&f0f_ud,
+/* 0xd8 */	&&f0f_0xd8, &&f0f_0xd9, &&f0f_ud, &&f0f_0xdb, &&f0f_0xdc, &&f0f_0xdd, &&f0f_ud, &&f0f_0xdf,
+/* 0xe0 */	&&f0f_ud, &&f0f_0xe1, &&f0f_0xe2, &&f0f_ud, &&f0f_ud, &&f0f_0xe5, &&f0f_ud, &&f0f_ud,
+/* 0xe8 */	&&f0f_0xe8, &&f0f_0xe9, &&f0f_ud, &&f0f_0xeb, &&f0f_0xec, &&f0f_0xed, &&f0f_ud, &&f0f_0xef,
+/* 0xf0 */	&&f0f_ud, &&f0f_0xf1, &&f0f_0xf2, &&f0f_0xf3, &&f0f_ud, &&f0f_0xf5, &&f0f_ud, &&f0f_ud,
+/* 0xf8 */	&&f0f_0xf8, &&f0f_0xf9, &&f0f_0xfa, &&f0f_ud, &&f0f_0xfc, &&f0f_0xfd, &&f0f_0xfe, &&f0f_0xff,
+#else
+/* 0xd0 */	&&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud,
+/* 0xd8 */	&&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud,
+/* 0xe0 */	&&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud,
+/* 0xe8 */	&&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud,
+/* 0xf0 */	&&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud,
+/* 0xf8 */	&&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_0xff,
+#endif
+		};
+		goto *pfxlabel_0f[b1];
+
+// Redefine CX for 0x0f opcode labels
+#undef CX
+#define CX(_1) f0f_ ## _1:
+#define I2(_case, _rm, _rwm, _op) _case { _rm(_rwm, _op); ebreak; }
+#include "i386ins.def"
+#undef I2
+
+// Restore CX to case syntax for group instruction inner switches
+#undef CX
+#define CX(_1) case _1:
+
+f0f_0x00: { // G6
+GRPBEG
+#define IG6 GRPCASE
+#include "i386ins.def"
+#undef IG6
+GRPEND
+}
+
+f0f_0x01: { // G7
+GRPBEG
+#define IG7 GRPCASE
+#include "i386ins.def"
+#undef IG7
+GRPEND
+}
+
+f0f_0xba: { // G8
+GRPBEG
+#define IG8 GRPCASE
+#include "i386ins.def"
+#undef IG8
+GRPEND
+}
+
+f0f_0xc7: { // G9
+GRPBEG
+#define IG9 GRPCASE
+#include "i386ins.def"
+#undef IG9
+GRPEND
+}
+
+f0f_ud: THROW0(EX_UD);
+
+// Restore CX to label syntax for rest of computed goto
+#undef CX
+#define CX(_1) f ## _1:
+
+#else /* !I386_OPT2 - use switch-case */
 		switch(b1) {
 #define I2(_case, _rm, _rwm, _op) _case { _rm(_rwm, _op); ebreak; }
 #include "i386ins.def"
@@ -4034,6 +4139,7 @@ GRPEND
 		}
 		default: default_ud;
 		}
+#endif /* I386_OPT2 */
 		ebreak;
 	}
 
