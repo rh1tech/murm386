@@ -772,15 +772,19 @@ void vga_hw_init(void) {
                           &dma_hw->ch[dma_data_chan].read_addr,
                           &lines_pattern[0], 1, false);
     
-    // Set up interrupt
+    // Set up interrupt with highest priority to prevent preemption
+    // VGA timing is critical - the ISR must run within ~32us (one scanline)
+    // to update the DMA read address before the next transfer starts.
+    // Priority 0x00 = highest priority on ARM Cortex-M.
     irq_set_exclusive_handler(VGA_DMA_IRQ, dma_handler_vga);
+    irq_set_priority(VGA_DMA_IRQ, 0x00);
     dma_channel_set_irq0_enabled(dma_ctrl_chan, true);
     irq_set_enabled(VGA_DMA_IRQ, true);
     
     // Start DMA
     dma_start_channel_mask(1u << dma_data_chan);
     
-    DBG_PRINT("  VGA started (640x400 text mode)!\n");
+    DBG_PRINT("  VGA started (640x400 text mode, IRQ priority=0x00)!\n");
 }
 
 void vga_hw_set_vram(uint8_t *vram) {
