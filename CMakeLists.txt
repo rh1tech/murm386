@@ -16,6 +16,9 @@ set(PSRAM_SPEED "166" CACHE STRING "PSRAM max frequency in MHz: 84, 100, 133, 16
 # USB HID keyboard support (disabled by default to keep USB CDC for debug)
 option(USB_HID_ENABLED "Enable USB HID keyboard (disables USB CDC stdio)" OFF)
 
+# Debug output (disabled by default for cleaner console)
+option(DEBUG_ENABLED "Enable verbose debug output" OFF)
+
 # CPU voltage selection based on speed
 if(CPU_SPEED GREATER_EQUAL 504)
     set(CPU_VOLTAGE "VREG_VOLTAGE_1_65")
@@ -209,6 +212,11 @@ target_compile_definitions(murm386 PRIVATE
     I386_ENABLE_INLINE=1
 )
 
+# Add DEBUG_ENABLED if enabled
+if(DEBUG_ENABLED)
+    target_compile_definitions(murm386 PRIVATE DEBUG_ENABLED=1)
+endif()
+
 # Compiler optimizations for performance
 target_compile_options(murm386 PRIVATE
     -O3
@@ -268,4 +276,5 @@ message(STATUS "  CPU Speed:      ${CPU_SPEED} MHz")
 message(STATUS "  CPU Voltage:    ${CPU_VOLTAGE}")
 message(STATUS "  PSRAM Speed:    ${PSRAM_SPEED} MHz")
 message(STATUS "  USB HID:        ${USB_HID_ENABLED}")
+message(STATUS "  Debug Output:   ${DEBUG_ENABLED}")
 message(STATUS "")

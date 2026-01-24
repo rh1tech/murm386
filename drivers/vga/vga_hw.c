@@ -8,6 +8,7 @@
 
 #include "vga_hw.h"
 #include "font8x16.h"
+#include "debug.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -661,16 +662,16 @@ static void __isr __time_critical_func(dma_handler_vga)(void) {
 // ============================================================================
 
 void vga_hw_init(void) {
-    printf("VGA Init (pico-286 style)...\n");
-    
+    DBG_PRINT("VGA Init (pico-286 style)...\n");
+
     init_palettes();
-    
+
     // Calculate clock divider for 25.175 MHz pixel clock
     float sys_clk = (float)clock_get_hz(clk_sys);
     float clk_div = sys_clk / 25175000.0f;
-    
-    printf("  System clock: %.1f MHz\n", sys_clk / 1e6);
-    printf("  Clock divider: %.4f\n", clk_div);
+
+    DBG_PRINT("  System clock: %.1f MHz\n", sys_clk / 1e6);
+    DBG_PRINT("  Clock divider: %.4f\n", clk_div);
     
     // Allocate line pattern buffers (6 buffers: 2 sync + 4 active)
     lines_pattern_data = (uint32_t *)calloc(LINE_SIZE * 6 / 4, sizeof(uint32_t));
@@ -739,7 +740,7 @@ void vga_hw_init(void) {
     uint32_t div_reg = (div_int << 16) | (div_frac << 8);
     VGA_PIO->sm[vga_sm].clkdiv = div_reg;
     
-    printf("  Clock divider reg: 0x%08x (int=%d, frac=%d)\n", div_reg, div_int, div_frac);
+    DBG_PRINT("  Clock divider reg: 0x%08x (int=%d, frac=%d)\n", div_reg, div_int, div_frac);
     
     pio_sm_set_enabled(VGA_PIO, vga_sm, true);
     
@@ -779,7 +780,7 @@ void vga_hw_init(void) {
     // Start DMA
     dma_start_channel_mask(1u << dma_data_chan);
     
-    printf("  VGA started (640x400 text mode)!\n");
+    DBG_PRINT("  VGA started (640x400 text mode)!\n");
 }
 
 void vga_hw_set_vram(uint8_t *vram) {
