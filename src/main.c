@@ -35,6 +35,8 @@
 #include "ini.h"
 #include "debug.h"
 #include "diskui.h"
+#include "settingsui.h"
+#include "config_save.h"
 #include "vga_osd.h"
 
 //=============================================================================
@@ -178,7 +180,7 @@ static void vga_redraw(void *opaque, int x, int y, int w, int h) {
 // Track modifier key state for Win+F12 hotkey
 static bool win_key_pressed = false;
 
-// Process a single keycode, handling disk UI hotkey
+// Process a single keycode, handling disk UI and settings UI hotkeys
 // Returns true if key should be passed to emulator, false if consumed
 static bool process_keycode(int is_down, int keycode) {
     // Track Win key state
@@ -188,16 +190,36 @@ static bool process_keycode(int is_down, int keycode) {
 
     // Check for Win+F12 hotkey to toggle disk UI
     if (is_down && keycode == KEY_F12 && win_key_pressed) {
-        if (!diskui_is_open()) {
+        if (!diskui_is_open() && !settingsui_is_open()) {
             // Open disk UI and pause emulation
             diskui_open();
             if (pc) {
                 pc->paused = 1;
                 audio_set_enabled(false);
             }
-        } else {
+        } else if (diskui_is_open()) {
             // Close disk UI and resume emulation
             diskui_close();
+            if (pc) {
+                pc->paused = 0;
+                audio_set_enabled(true);
+            }
+        }
+        return false;  // Don't pass to emulator
+    }
+
+    // Check for Win+F11 hotkey to toggle settings UI
+    if (is_down && keycode == KEY_F11 && win_key_pressed) {
+        if (!settingsui_is_open() && !diskui_is_open()) {
+            // Open settings UI and pause emulation
+            settingsui_open();
+            if (pc) {
+                pc->paused = 1;
+                audio_set_enabled(false);
+            }
+        } else if (settingsui_is_open()) {
+            // Close settings UI and resume emulation
+            settingsui_close();
             if (pc) {
                 pc->paused = 0;
                 audio_set_enabled(true);
@@ -212,6 +234,18 @@ static bool process_keycode(int is_down, int keycode) {
 
         // Check if disk UI was closed by Escape
         if (!diskui_is_open() && pc && pc->paused) {
+            pc->paused = 0;
+            audio_set_enabled(true);
+        }
+        return false;  // Don't pass to emulator
+    }
+
+    // When settings UI is open, route all keys to it
+    if (settingsui_is_open()) {
+        settingsui_handle_key(keycode, is_down);
+
+        // Check if settings UI was closed by Escape
+        if (!settingsui_is_open() && pc && pc->paused) {
             pc->paused = 0;
             audio_set_enabled(true);
         }
@@ -531,6 +565,17 @@ static bool init_emulator(void) {
     DBG_PRINT("Initializing Disk UI...\n");
     diskui_init();
 
+    // Initialize settings UI
+    DBG_PRINT("Initializing Settings UI...\n");
+    settingsui_init();
+
+    // Initialize config save module with current values
+    config_set_mem_size_mb(config.mem_size / (1024 * 1024));
+    config_set_vga_mem_kb(config.vga_mem_size / 1024);
+    config_set_cpu_gen(config.cpu_gen);
+    config_set_fpu(config.fpu);
+    config_clear_changes();
+
     // Load BIOS and reset
     DBG_PRINT("Loading BIOS...\n");
     load_bios_and_reset(pc);
@@ -781,6 +826,14 @@ int main(void) {
         // Check for reset request
         if (pc->reset_request) {
             pc->reset_request = 0;
+            load_bios_and_reset(pc);
+        }
+
+        // Check for settings UI restart request
+        if (settingsui_restart_requested()) {
+            settingsui_clear_restart();
+            DBG_PRINT("Settings changed - triggering restart...\n");
+            // Full system reset with new configuration
             load_bios_and_reset(pc);
         }
 

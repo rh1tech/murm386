@@ -1,0 +1,264 @@
+/**
+ * Settings UI for murm386
+ *
+ * On-screen settings manager for changing emulator configuration.
+ */
+
+#include "settingsui.h"
+#include "diskui.h"
+#include "config_save.h"
+#include "../drivers/vga/vga_osd.h"
+#include <string.h>
+#include <stdio.h>
+
+// Menu states
+typedef enum {
+    SETTINGS_CLOSED,
+    SETTINGS_MAIN,
+    SETTINGS_CONFIRM
+} SettingsState;
+
+// Setting items
+typedef enum {
+    SETTING_MEM = 0,
+    SETTING_VGAMEM,
+    SETTING_CPU,
+    SETTING_FPU,
+    SETTING_COUNT
+} SettingItem;
+
+// Option values
+static const int mem_options[] = { 1, 2, 4, 7 };
+static const int mem_option_count = 4;
+
+static const int vgamem_options[] = { 128, 256 };
+static const int vgamem_option_count = 2;
+
+static const int cpu_options[] = { 3, 4, 5 };
+static const int cpu_option_count = 3;
+
+// State
+static SettingsState settings_state = SETTINGS_CLOSED;
+static int selected_item = 0;
+static bool restart_requested = false;
+
+// Original values (to detect changes)
+static int orig_mem, orig_vgamem, orig_cpu, orig_fpu;
+
+// UI dimensions
+#define MENU_X      15
+#define MENU_Y      6
+#define MENU_W      50
+#define MENU_H      13
+
+// Forward declarations
+static void draw_settings_menu(void);
+static void draw_confirm_dialog(void);
+static int find_option_index(const int *options, int count, int value);
+static void cycle_option(int direction);
+
+void settingsui_init(void) {
+    settings_state = SETTINGS_CLOSED;
+    restart_requested = false;
+}
+
+void settingsui_open(void) {
+    if (settings_state != SETTINGS_CLOSED) return;
+
+    // Store original values
+    orig_mem = config_get_mem_size_mb();
+    orig_vgamem = config_get_vga_mem_kb();
+    orig_cpu = config_get_cpu_gen();
+    orig_fpu = config_get_fpu();
+
+    settings_state = SETTINGS_MAIN;
+    selected_item = 0;
+    osd_clear();
+    osd_show();
+    draw_settings_menu();
+}
+
+void settingsui_close(void) {
+    // Restore original values if not confirmed
+    if (settings_state == SETTINGS_MAIN && config_has_changes()) {
+        config_set_mem_size_mb(orig_mem);
+        config_set_vga_mem_kb(orig_vgamem);
+        config_set_cpu_gen(orig_cpu);
+        config_set_fpu(orig_fpu);
+        config_clear_changes();
+    }
+    settings_state = SETTINGS_CLOSED;
+    osd_hide();
+}
+
+bool settingsui_is_open(void) {
+    return settings_state != SETTINGS_CLOSED;
+}
+
+bool settingsui_restart_requested(void) {
+    return restart_requested;
+}
+
+void settingsui_clear_restart(void) {
+    restart_requested = false;
+}
+
+static int find_option_index(const int *options, int count, int value) {
+    for (int i = 0; i < count; i++) {
+        if (options[i] == value) return i;
+    }
+    return 0;
+}
+
+static void cycle_option(int direction) {
+    int idx, count;
+    const int *options;
+
+    switch (selected_item) {
+        case SETTING_MEM:
+            options = mem_options;
+            count = mem_option_count;
+            idx = find_option_index(options, count, config_get_mem_size_mb());
+            idx = (idx + direction + count) % count;
+            config_set_mem_size_mb(options[idx]);
+            break;
+
+        case SETTING_VGAMEM:
+            options = vgamem_options;
+            count = vgamem_option_count;
+            idx = find_option_index(options, count, config_get_vga_mem_kb());
+            idx = (idx + direction + count) % count;
+            config_set_vga_mem_kb(options[idx]);
+            break;
+
+        case SETTING_CPU:
+            options = cpu_options;
+            count = cpu_option_count;
+            idx = find_option_index(options, count, config_get_cpu_gen());
+            idx = (idx + direction + count) % count;
+            config_set_cpu_gen(options[idx]);
+            break;
+
+        case SETTING_FPU:
+            config_set_fpu(config_get_fpu() ? 0 : 1);
+            break;
+    }
+}
+
+static void draw_settings_menu(void) {
+    osd_clear();
+
+    // Draw box
+    osd_draw_box_titled(MENU_X, MENU_Y, MENU_W, MENU_H, " Settings ", OSD_ATTR_BORDER);
+    osd_fill(MENU_X + 1, MENU_Y + 1, MENU_W - 2, MENU_H - 2, ' ', OSD_ATTR_NORMAL);
+
+    // Settings items
+    const char *labels[] = { "RAM Size:", "VGA Memory:", "CPU Type:", "FPU (387):" };
+    char value[20];
+
+    for (int i = 0; i < SETTING_COUNT; i++) {
+        int y = MENU_Y + 2 + i;
+        uint8_t attr = (i == selected_item) ? OSD_ATTR_SELECTED : OSD_ATTR_NORMAL;
+
+        osd_fill(MENU_X + 2, y, MENU_W - 4, 1, ' ', attr);
+        osd_print(MENU_X + 3, y, labels[i], attr);
+
+        // Format value
+        switch (i) {
+            case SETTING_MEM:
+                snprintf(value, sizeof(value), "< %d MB >", config_get_mem_size_mb());
+                break;
+            case SETTING_VGAMEM:
+                snprintf(value, sizeof(value), "< %d KB >", config_get_vga_mem_kb());
+                break;
+            case SETTING_CPU:
+                snprintf(value, sizeof(value), "< 80%d86 >", config_get_cpu_gen());
+                break;
+            case SETTING_FPU:
+                snprintf(value, sizeof(value), "< %s >", config_get_fpu() ? "Enabled" : "Disabled");
+                break;
+        }
+        osd_print(MENU_X + 20, y, value, attr);
+    }
+
+    // Show if changes pending
+    if (config_has_changes()) {
+        osd_print(MENU_X + 3, MENU_Y + MENU_H - 4, "* Changes pending - Enter to apply", OSD_ATTR_HIGHLIGHT);
+    }
+
+    // Help
+    osd_print(MENU_X + 2, MENU_Y + MENU_H - 2, "\x18\x19:Select  \x1b\x1a:Change  Enter:Apply  Esc:Cancel", OSD_ATTR_HIGHLIGHT);
+}
+
+static void draw_confirm_dialog(void) {
+    int dx = 20, dy = 10, dw = 40, dh = 5;
+
+    osd_draw_box_titled(dx, dy, dw, dh, " Confirm ", OSD_ATTR_TITLE);
+    osd_fill(dx + 1, dy + 1, dw - 2, dh - 2, ' ', OSD_ATTR_NORMAL);
+    osd_print(dx + 3, dy + 2, "Save settings and restart? (Y/N)", OSD_ATTR_NORMAL);
+}
+
+bool settingsui_handle_key(int keycode, bool is_down) {
+    if (!is_down) return true;
+
+    switch (settings_state) {
+        case SETTINGS_MAIN:
+            switch (keycode) {
+                case KEY_UP:
+                    if (selected_item > 0) {
+                        selected_item--;
+                        draw_settings_menu();
+                    }
+                    break;
+
+                case KEY_DOWN:
+                    if (selected_item < SETTING_COUNT - 1) {
+                        selected_item++;
+                        draw_settings_menu();
+                    }
+                    break;
+
+                case KEY_LEFT:
+                    cycle_option(-1);
+                    draw_settings_menu();
+                    break;
+
+                case KEY_RIGHT:
+                    cycle_option(1);
+                    draw_settings_menu();
+                    break;
+
+                case KEY_ENTER:
+                    if (config_has_changes()) {
+                        settings_state = SETTINGS_CONFIRM;
+                        draw_confirm_dialog();
+                    } else {
+                        settingsui_close();
+                    }
+                    break;
+
+                case KEY_ESC:
+                    settingsui_close();
+                    break;
+            }
+            break;
+
+        case SETTINGS_CONFIRM:
+            // Y = 21, N = 49
+            if (keycode == 21) {  // Y
+                config_save_all();
+                restart_requested = true;
+                settings_state = SETTINGS_CLOSED;
+                osd_hide();
+            } else if (keycode == 49 || keycode == KEY_ESC) {  // N or Escape
+                settings_state = SETTINGS_MAIN;
+                draw_settings_menu();
+            }
+            break;
+
+        default:
+            break;
+    }
+
+    return true;
+}

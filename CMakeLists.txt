@@ -169,6 +169,8 @@ add_executable(murm386
     src/platform_rp2350.c
     src/stubs_rp2350.c
     src/diskui.c
+    src/settingsui.c
+    src/config_save.c
     ${EMU_CORE_SOURCES}
 )
 
