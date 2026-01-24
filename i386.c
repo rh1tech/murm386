@@ -305,53 +305,55 @@ enum {
 
 static int get_CF(CPUI386 *cpu)
 {
-	if (cpu->cc.mask & CF) {
-		switch(cpu->cc.op) {
-		case CC_ADC:
-			return cpu->cc.dst <= cpu->cc.src2;
-		case CC_ADD:
-			return cpu->cc.dst < cpu->cc.src2;
-		case CC_SBB:
-			return cpu->cc.src1 <= cpu->cc.src2;
-		case CC_SUB:
-			return cpu->cc.src1 < cpu->cc.src2;
-		case CC_NEG8: case CC_NEG16: case CC_NEG32:
-			return cpu->cc.dst != 0;
-		case CC_DEC8: case CC_DEC16: case CC_DEC32:
-		case CC_INC8: case CC_INC16: case CC_INC32:
-			assert(false); // should not happen
-		case CC_IMUL8:
-			return sext8(cpu->cc.dst) != cpu->cc.dst;
-		case CC_IMUL16:
-			return sext16(cpu->cc.dst) != cpu->cc.dst;
-		case CC_IMUL32:
-			return (((s32) cpu->cc.dst) >> 31) != cpu->cc.dst2;
-		case CC_MUL8:
-			return (cpu->cc.dst >> 8) != 0;
-		case CC_MUL16:
-			return (cpu->cc.dst >> 16) != 0;
-		case CC_MUL32:
-			return (cpu->cc.dst2) != 0;
-		case CC_SHL:
-		case CC_SHR:
-		case CC_SAR:
-			return cpu->cc.dst2 & 1;
-		case CC_SHLD:
-			return cpu->cc.dst2 >> 31;
-		case CC_SHRD:
-			return cpu->cc.dst2 & 1;
-		case CC_BSF:
-		case CC_BSR:
-			return 0;
-		case CC_AND:
-		case CC_OR:
-		case CC_XOR:
-			return 0;
-		}
-	} else {
+	/* Fast path: CF not lazy - just return from flags */
+	if (likely(!(cpu->cc.mask & CF))) {
 		return !!(cpu->flags & CF);
 	}
+	/* Lazy CF computation */
+	switch(cpu->cc.op) {
+	case CC_ADC:
+		return cpu->cc.dst <= cpu->cc.src2;
+	case CC_ADD:
+		return cpu->cc.dst < cpu->cc.src2;
+	case CC_SBB:
+		return cpu->cc.src1 <= cpu->cc.src2;
+	case CC_SUB:
+		return cpu->cc.src1 < cpu->cc.src2;
+	case CC_NEG8: case CC_NEG16: case CC_NEG32:
+		return cpu->cc.dst != 0;
+	case CC_DEC8: case CC_DEC16: case CC_DEC32:
+	case CC_INC8: case CC_INC16: case CC_INC32:
+		assert(false); // should not happen
+	case CC_IMUL8:
+		return sext8(cpu->cc.dst) != cpu->cc.dst;
+	case CC_IMUL16:
+		return sext16(cpu->cc.dst) != cpu->cc.dst;
+	case CC_IMUL32:
+		return (((s32) cpu->cc.dst) >> 31) != cpu->cc.dst2;
+	case CC_MUL8:
+		return (cpu->cc.dst >> 8) != 0;
+	case CC_MUL16:
+		return (cpu->cc.dst >> 16) != 0;
+	case CC_MUL32:
+		return (cpu->cc.dst2) != 0;
+	case CC_SHL:
+	case CC_SHR:
+	case CC_SAR:
+		return cpu->cc.dst2 & 1;
+	case CC_SHLD:
+		return cpu->cc.dst2 >> 31;
+	case CC_SHRD:
+		return cpu->cc.dst2 & 1;
+	case CC_BSF:
+	case CC_BSR:
+		return 0;
+	case CC_AND:
+	case CC_OR:
+	case CC_XOR:
+		return 0;
+	}
 	assert(false);
+	return 0;
 }
 
 const static u8 parity_tab[256] = {
@@ -375,114 +377,108 @@ const static u8 parity_tab[256] = {
 
 static int get_PF(CPUI386 *cpu)
 {
-	if (cpu->cc.mask & PF) {
-		return parity_tab[cpu->cc.dst & 0xff];
-	} else {
+	if (likely(!(cpu->cc.mask & PF))) {
 		return !!(cpu->flags & PF);
 	}
+	return parity_tab[cpu->cc.dst & 0xff];
 }
 
 static int get_AF(CPUI386 *cpu)
 {
-	if (cpu->cc.mask & AF) {
-		switch(cpu->cc.op) {
-		case CC_ADC:
-		case CC_ADD:
-		case CC_SBB:
-		case CC_SUB:
-			return ((cpu->cc.src1 ^ cpu->cc.src2 ^ cpu->cc.dst) >> 4) & 1;
-		case CC_NEG8: case CC_NEG16: case CC_NEG32:
-			return (cpu->cc.dst & 0xf) != 0;
-		case CC_DEC8: case CC_DEC16: case CC_DEC32:
-			return (cpu->cc.dst & 0xf) == 0xf;
-		case CC_INC8: case CC_INC16: case CC_INC32:
-			return (cpu->cc.dst & 0xf) == 0;
-		case CC_IMUL8: case CC_IMUL16: case CC_IMUL32:
-		case CC_MUL8: case CC_MUL16: case CC_MUL32:
-			return 0;
-		case CC_SAR:
-		case CC_SHL:
-		case CC_SHR:
-		case CC_SHLD:
-		case CC_SHRD:
-		case CC_BSF:
-		case CC_BSR:
-		case CC_AND:
-		case CC_OR:
-		case CC_XOR:
-			return 0;
-		}
-	} else {
+	if (likely(!(cpu->cc.mask & AF))) {
 		return !!(cpu->flags & AF);
 	}
+	switch(cpu->cc.op) {
+	case CC_ADC:
+	case CC_ADD:
+	case CC_SBB:
+	case CC_SUB:
+		return ((cpu->cc.src1 ^ cpu->cc.src2 ^ cpu->cc.dst) >> 4) & 1;
+	case CC_NEG8: case CC_NEG16: case CC_NEG32:
+		return (cpu->cc.dst & 0xf) != 0;
+	case CC_DEC8: case CC_DEC16: case CC_DEC32:
+		return (cpu->cc.dst & 0xf) == 0xf;
+	case CC_INC8: case CC_INC16: case CC_INC32:
+		return (cpu->cc.dst & 0xf) == 0;
+	case CC_IMUL8: case CC_IMUL16: case CC_IMUL32:
+	case CC_MUL8: case CC_MUL16: case CC_MUL32:
+	case CC_SAR:
+	case CC_SHL:
+	case CC_SHR:
+	case CC_SHLD:
+	case CC_SHRD:
+	case CC_BSF:
+	case CC_BSR:
+	case CC_AND:
+	case CC_OR:
+	case CC_XOR:
+		return 0;
+	}
 	assert(false);
+	return 0;
 }
 
 static int IRAM_ATTR get_ZF(CPUI386 *cpu)
 {
-	if (cpu->cc.mask & ZF) {
-		return cpu->cc.dst == 0;
-	} else {
+	if (likely(!(cpu->cc.mask & ZF))) {
 		return !!(cpu->flags & ZF);
 	}
+	return cpu->cc.dst == 0;
 }
 
 static int IRAM_ATTR get_SF(CPUI386 *cpu)
 {
-	if (cpu->cc.mask & SF) {
-		return cpu->cc.dst >> (sizeof(uword) * 8 - 1);
-	} else {
+	if (likely(!(cpu->cc.mask & SF))) {
 		return !!(cpu->flags & SF);
 	}
+	return cpu->cc.dst >> (sizeof(uword) * 8 - 1);
 }
 
 static int get_OF(CPUI386 *cpu)
 {
-	if (cpu->cc.mask & OF) {
-		switch(cpu->cc.op) {
-		case CC_ADC:
-		case CC_ADD:
-			return (~(cpu->cc.src1 ^ cpu->cc.src2) & (cpu->cc.dst ^ cpu->cc.src2)) >> (sizeof(uword) * 8 - 1);
-		case CC_SBB:
-		case CC_SUB:
-			return ((cpu->cc.src1 ^ cpu->cc.src2) & (cpu->cc.dst ^ cpu->cc.src1)) >> (sizeof(uword) * 8 - 1);
-		case CC_DEC8:
-			return cpu->cc.dst == sext8((u8) ~(1u << 7));
-		case CC_DEC16:
-			return cpu->cc.dst == sext16((u16) ~(1u << 15));
-		case CC_DEC32:
-			return cpu->cc.dst == sext32((u32) ~(1u << 31));
-		case CC_INC8: case CC_NEG8:
-			return cpu->cc.dst == sext8(1u << 7);
-		case CC_INC16: case CC_NEG16:
-			return cpu->cc.dst == sext16(1u << 15);
-		case CC_INC32: case CC_NEG32:
-			return cpu->cc.dst == sext32(1u << 31);
-		case CC_IMUL8: case CC_IMUL16: case CC_IMUL32:
-		case CC_MUL8: case CC_MUL16: case CC_MUL32:
-			return get_CF(cpu);
-		case CC_SAR:
-			return 0;
-		case CC_SHL:
-			return (cpu->cc.dst >> (sizeof(uword) * 8 - 1)) ^ (cpu->cc.dst2 & 1);
-		case CC_SHR:
-			return (cpu->cc.src1 >> (sizeof(uword) * 8 - 1));
-		case CC_SHLD:
-		case CC_SHRD:
-			return (cpu->cc.src1 ^ cpu->cc.dst) >> (sizeof(uword) * 8 - 1);
-		case CC_BSF:
-		case CC_BSR:
-			return 0;
-		case CC_AND:
-		case CC_OR:
-		case CC_XOR:
-			return 0;
-		}
-		assert(false);
-	} else {
+	if (likely(!(cpu->cc.mask & OF))) {
 		return !!(cpu->flags & OF);
 	}
+	switch(cpu->cc.op) {
+	case CC_ADC:
+	case CC_ADD:
+		return (~(cpu->cc.src1 ^ cpu->cc.src2) & (cpu->cc.dst ^ cpu->cc.src2)) >> (sizeof(uword) * 8 - 1);
+	case CC_SBB:
+	case CC_SUB:
+		return ((cpu->cc.src1 ^ cpu->cc.src2) & (cpu->cc.dst ^ cpu->cc.src1)) >> (sizeof(uword) * 8 - 1);
+	case CC_DEC8:
+		return cpu->cc.dst == sext8((u8) ~(1u << 7));
+	case CC_DEC16:
+		return cpu->cc.dst == sext16((u16) ~(1u << 15));
+	case CC_DEC32:
+		return cpu->cc.dst == sext32((u32) ~(1u << 31));
+	case CC_INC8: case CC_NEG8:
+		return cpu->cc.dst == sext8(1u << 7);
+	case CC_INC16: case CC_NEG16:
+		return cpu->cc.dst == sext16(1u << 15);
+	case CC_INC32: case CC_NEG32:
+		return cpu->cc.dst == sext32(1u << 31);
+	case CC_IMUL8: case CC_IMUL16: case CC_IMUL32:
+	case CC_MUL8: case CC_MUL16: case CC_MUL32:
+		return get_CF(cpu);
+	case CC_SAR:
+		return 0;
+	case CC_SHL:
+		return (cpu->cc.dst >> (sizeof(uword) * 8 - 1)) ^ (cpu->cc.dst2 & 1);
+	case CC_SHR:
+		return (cpu->cc.src1 >> (sizeof(uword) * 8 - 1));
+	case CC_SHLD:
+	case CC_SHRD:
+		return (cpu->cc.src1 ^ cpu->cc.dst) >> (sizeof(uword) * 8 - 1);
+	case CC_BSF:
+	case CC_BSR:
+	case CC_AND:
+	case CC_OR:
+	case CC_XOR:
+		return 0;
+	}
 	assert(false);
+	return 0;
 }
 
 static void refresh_flags(CPUI386 *cpu)
@@ -567,7 +563,7 @@ static bool IRAM_ATTR tlb_refill(CPUI386 *cpu, struct tlb_entry *ent, uword lpgn
 static bool IRAM_ATTR translate_lpgno(CPUI386 *cpu, int rwm, uword lpgno, uword laddr, int cpl, uword *paddr)
 {
 	struct tlb_entry *ent = &(cpu->tlb.tab[lpgno % tlb_size]);
-	if (ent->lpgno != lpgno) {
+	if (unlikely(ent->lpgno != lpgno)) {
 		if (!tlb_refill(cpu, ent, lpgno)) {
 			cpu->cr2 = laddr;
 			cpu->excno = EX_PF;
@@ -579,7 +575,7 @@ static bool IRAM_ATTR translate_lpgno(CPUI386 *cpu, int rwm, uword lpgno, uword 
 			return false;
 		}
 	}
-	if (ent->pte_lookup[cpl > 0][rwm > 1]) {
+	if (unlikely(ent->pte_lookup[cpl > 0][rwm > 1])) {
 		cpu->cr2 = laddr;
 		cpu->excno = EX_PF;
 		cpu->excerr = 1;
@@ -716,7 +712,7 @@ static inline bool in_iomem(uword addr)
 static u8 IRAM_ATTR load8(CPUI386 *cpu, OptAddr *res)
 {
 	uword addr = res->addr1;
-	if (in_iomem(addr) && cpu->cb.iomem_read8)
+	if (unlikely(in_iomem(addr)) && cpu->cb.iomem_read8)
 		return cpu->cb.iomem_read8(cpu->cb.iomem, addr);
 	if (unlikely(addr >= cpu->phys_mem_size)) {
 		return 0;
@@ -726,7 +722,7 @@ static u8 IRAM_ATTR load8(CPUI386 *cpu, OptAddr *res)
 
 static u16 IRAM_ATTR load16(CPUI386 *cpu, OptAddr *res)
 {
-	if (in_iomem(res->addr1) && cpu->cb.iomem_read16)
+	if (unlikely(in_iomem(res->addr1)) && cpu->cb.iomem_read16)
 		return cpu->cb.iomem_read16(cpu->cb.iomem, res->addr1);
 	if (unlikely(res->addr1 >= cpu->phys_mem_size)) {
 		return 0;
@@ -739,7 +735,7 @@ static u16 IRAM_ATTR load16(CPUI386 *cpu, OptAddr *res)
 
 static u32 IRAM_ATTR load32(CPUI386 *cpu, OptAddr *res)
 {
-	if (in_iomem(res->addr1) && cpu->cb.iomem_read32)
+	if (unlikely(in_iomem(res->addr1)) && cpu->cb.iomem_read32)
 		return cpu->cb.iomem_read32(cpu->cb.iomem, res->addr1);
 	if (unlikely(res->addr1 >= cpu->phys_mem_size)) {
 		return 0;
@@ -764,7 +760,7 @@ static u32 IRAM_ATTR load32(CPUI386 *cpu, OptAddr *res)
 static void IRAM_ATTR store8(CPUI386 *cpu, OptAddr *res, u8 val)
 {
 	uword addr = res->addr1;
-	if (in_iomem(addr) && cpu->cb.iomem_write8) {
+	if (unlikely(in_iomem(addr)) && cpu->cb.iomem_write8) {
 		cpu->cb.iomem_write8(cpu->cb.iomem, addr, val);
 		return;
 	}
@@ -776,7 +772,7 @@ static void IRAM_ATTR store8(CPUI386 *cpu, OptAddr *res, u8 val)
 
 static void IRAM_ATTR store16(CPUI386 *cpu, OptAddr *res, u16 val)
 {
-	if (in_iomem(res->addr1) && cpu->cb.iomem_write16) {
+	if (unlikely(in_iomem(res->addr1)) && cpu->cb.iomem_write16) {
 		cpu->cb.iomem_write16(cpu->cb.iomem, res->addr1, val);
 		return;
 	}
@@ -793,7 +789,7 @@ static void IRAM_ATTR store16(CPUI386 *cpu, OptAddr *res, u16 val)
 
 static void IRAM_ATTR store32(CPUI386 *cpu, OptAddr *res, u32 val)
 {
-	if (in_iomem(res->addr1) && cpu->cb.iomem_write32) {
+	if (unlikely(in_iomem(res->addr1)) && cpu->cb.iomem_write32) {
 		cpu->cb.iomem_write32(cpu->cb.iomem, res->addr1, val);
 		return;
 	}
