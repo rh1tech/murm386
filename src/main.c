@@ -535,6 +535,24 @@ static bool init_hardware(void) {
     }
     DBG_PRINT("  SD card mounted\n");
 
+    // Load config early to get clock settings before VGA init
+    // (VGA PIO timing depends on system clock frequency)
+    load_default_config();
+    if (load_config_from_sd("config.ini") != 0) {
+        DBG_PRINT("Using default configuration\n");
+    }
+
+    // Reconfigure clocks if config differs from compile-time defaults
+    // MUST happen before VGA init so PIO timing is correct
+    int cfg_cpu_freq = config_get_cpu_freq();
+    int cfg_psram_freq = config_get_psram_freq();
+    if (cfg_cpu_freq != CPU_CLOCK_MHZ || cfg_psram_freq != PSRAM_MAX_FREQ_MHZ) {
+        DBG_PRINT("Config frequencies differ from compile-time defaults\n");
+        DBG_PRINT("  Compile: CPU=%d MHz, PSRAM=%d MHz\n", CPU_CLOCK_MHZ, PSRAM_MAX_FREQ_MHZ);
+        DBG_PRINT("  Config:  CPU=%d MHz, PSRAM=%d MHz\n", cfg_cpu_freq, cfg_psram_freq);
+        reconfigure_clocks(cfg_cpu_freq, cfg_psram_freq);
+    }
+
     // Initialize PS/2 keyboard
     DBG_PRINT("Initializing PS/2 keyboard...\n");
     DBG_PRINT("  CLK: GPIO%d, DATA: GPIO%d\n", PS2_PIN_CLK, PS2_PIN_DATA);
@@ -546,7 +564,7 @@ static bool init_hardware(void) {
     usbkbd_init();
 #endif
 
-    // Initialize VGA
+    // Initialize VGA (after clock reconfiguration so PIO timing is correct)
     DBG_PRINT("Initializing VGA...\n");
     DBG_PRINT("  Base pin: GPIO%d\n", VGA_BASE_PIN);
     vga_hw_init();
@@ -567,23 +585,7 @@ static bool init_hardware(void) {
 //=============================================================================
 
 static bool init_emulator(void) {
-    // Load configuration
-    load_default_config();
-
-    // Try to load config from SD card
-    if (load_config_from_sd("config.ini") != 0) {
-        DBG_PRINT("Using default configuration\n");
-    }
-
-    // Check if we need to reconfigure clocks based on loaded settings
-    int cfg_cpu_freq = config_get_cpu_freq();
-    int cfg_psram_freq = config_get_psram_freq();
-    if (cfg_cpu_freq != CPU_CLOCK_MHZ || cfg_psram_freq != PSRAM_MAX_FREQ_MHZ) {
-        DBG_PRINT("Config frequencies differ from compile-time defaults\n");
-        DBG_PRINT("  Compile: CPU=%d MHz, PSRAM=%d MHz\n", CPU_CLOCK_MHZ, PSRAM_MAX_FREQ_MHZ);
-        DBG_PRINT("  Config:  CPU=%d MHz, PSRAM=%d MHz\n", cfg_cpu_freq, cfg_psram_freq);
-        reconfigure_clocks(cfg_cpu_freq, cfg_psram_freq);
-    }
+    // Config was already loaded in init_hardware (before VGA init for clock timing)
 
     DBG_PRINT("\nEmulator configuration:\n");
     DBG_PRINT("  Memory: %ld MB\n", config.mem_size / (1024 * 1024));
