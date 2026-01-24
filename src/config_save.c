@@ -12,9 +12,10 @@
 
 // Current configuration values (minimal storage)
 static int cfg_mem_mb = 7;
-static int cfg_vga_kb = 256;
+static int cfg_vga_kb = 128;
 static int cfg_cpu_gen = 4;
 static int cfg_fpu = 0;
+static int cfg_fill_cmos = 1;
 static bool cfg_changed = false;
 
 // INI file path
@@ -57,6 +58,14 @@ void config_set_fpu(int enabled) {
     }
 }
 
+int config_get_fill_cmos(void) { return cfg_fill_cmos; }
+void config_set_fill_cmos(int enabled) {
+    if (cfg_fill_cmos != enabled) {
+        cfg_fill_cmos = enabled;
+        cfg_changed = true;
+    }
+}
+
 bool config_has_changes(void) { return cfg_changed; }
 void config_clear_changes(void) { cfg_changed = false; }
 
@@ -92,6 +101,10 @@ bool config_save_all(void) {
     // BIOS files
     write_line(&fp, "bios=bios.bin\n");
     write_line(&fp, "vga_bios=vgabios.bin\n");
+
+    // Fill CMOS
+    snprintf(line, sizeof(line), "fill_cmos=%d\n", cfg_fill_cmos);
+    write_line(&fp, line);
 
     // FPU
     write_line(&fp, "\n[cpu]\n");

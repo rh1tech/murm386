@@ -21,18 +21,15 @@ typedef enum {
 // Setting items
 typedef enum {
     SETTING_MEM = 0,
-    SETTING_VGAMEM,
     SETTING_CPU,
     SETTING_FPU,
+    SETTING_FILL_CMOS,
     SETTING_COUNT
 } SettingItem;
 
 // Option values
-static const int mem_options[] = { 1, 2, 4, 7 };
-static const int mem_option_count = 4;
-
-static const int vgamem_options[] = { 128, 256 };
-static const int vgamem_option_count = 2;
+static const int mem_options[] = { 1, 2, 4 };
+static const int mem_option_count = 3;
 
 static const int cpu_options[] = { 3, 4, 5 };
 static const int cpu_option_count = 3;
@@ -43,7 +40,7 @@ static int selected_item = 0;
 static bool restart_requested = false;
 
 // Original values (to detect changes)
-static int orig_mem, orig_vgamem, orig_cpu, orig_fpu;
+static int orig_mem, orig_cpu, orig_fpu, orig_fill_cmos;
 
 // UI dimensions
 #define MENU_X      15
@@ -67,9 +64,9 @@ void settingsui_open(void) {
 
     // Store original values
     orig_mem = config_get_mem_size_mb();
-    orig_vgamem = config_get_vga_mem_kb();
     orig_cpu = config_get_cpu_gen();
     orig_fpu = config_get_fpu();
+    orig_fill_cmos = config_get_fill_cmos();
 
     settings_state = SETTINGS_MAIN;
     selected_item = 0;
@@ -82,9 +79,9 @@ void settingsui_close(void) {
     // Restore original values if not confirmed
     if (settings_state == SETTINGS_MAIN && config_has_changes()) {
         config_set_mem_size_mb(orig_mem);
-        config_set_vga_mem_kb(orig_vgamem);
         config_set_cpu_gen(orig_cpu);
         config_set_fpu(orig_fpu);
+        config_set_fill_cmos(orig_fill_cmos);
         config_clear_changes();
     }
     settings_state = SETTINGS_CLOSED;
@@ -123,14 +120,6 @@ static void cycle_option(int direction) {
             config_set_mem_size_mb(options[idx]);
             break;
 
-        case SETTING_VGAMEM:
-            options = vgamem_options;
-            count = vgamem_option_count;
-            idx = find_option_index(options, count, config_get_vga_mem_kb());
-            idx = (idx + direction + count) % count;
-            config_set_vga_mem_kb(options[idx]);
-            break;
-
         case SETTING_CPU:
             options = cpu_options;
             count = cpu_option_count;
@@ -141,6 +130,10 @@ static void cycle_option(int direction) {
 
         case SETTING_FPU:
             config_set_fpu(config_get_fpu() ? 0 : 1);
+            break;
+
+        case SETTING_FILL_CMOS:
+            config_set_fill_cmos(config_get_fill_cmos() ? 0 : 1);
             break;
     }
 }
@@ -153,7 +146,7 @@ static void draw_settings_menu(void) {
     osd_fill(MENU_X + 1, MENU_Y + 1, MENU_W - 2, MENU_H - 2, ' ', OSD_ATTR_NORMAL);
 
     // Settings items
-    const char *labels[] = { "RAM Size:", "VGA Memory:", "CPU Type:", "FPU (387):" };
+    const char *labels[] = { "RAM Size:", "CPU Type:", "FPU (387):", "Fill CMOS:" };
     char value[20];
 
     for (int i = 0; i < SETTING_COUNT; i++) {
@@ -168,14 +161,14 @@ static void draw_settings_menu(void) {
             case SETTING_MEM:
                 snprintf(value, sizeof(value), "< %d MB >", config_get_mem_size_mb());
                 break;
-            case SETTING_VGAMEM:
-                snprintf(value, sizeof(value), "< %d KB >", config_get_vga_mem_kb());
-                break;
             case SETTING_CPU:
                 snprintf(value, sizeof(value), "< 80%d86 >", config_get_cpu_gen());
                 break;
             case SETTING_FPU:
                 snprintf(value, sizeof(value), "< %s >", config_get_fpu() ? "Enabled" : "Disabled");
+                break;
+            case SETTING_FILL_CMOS:
+                snprintf(value, sizeof(value), "< %s >", config_get_fill_cmos() ? "Enabled" : "Disabled");
                 break;
         }
         osd_print(MENU_X + 20, y, value, attr);
@@ -193,9 +186,21 @@ static void draw_settings_menu(void) {
 static void draw_confirm_dialog(void) {
     int dx = 20, dy = 10, dw = 40, dh = 5;
 
-    osd_draw_box_titled(dx, dy, dw, dh, " Confirm ", OSD_ATTR_TITLE);
-    osd_fill(dx + 1, dy + 1, dw - 2, dh - 2, ' ', OSD_ATTR_NORMAL);
-    osd_print(dx + 3, dy + 2, "Save settings and restart? (Y/N)", OSD_ATTR_NORMAL);
+    // Draw shadow (dark gray on black)
+    uint8_t shadow_attr = OSD_ATTR(OSD_DARKGRAY, OSD_BLACK);
+    osd_fill(dx + 2, dy + dh, dw, 1, '\xDB', shadow_attr);  // Bottom shadow
+    for (int i = 1; i < dh + 1; i++) {
+        osd_putchar(dx + dw, dy + i, '\xDB', shadow_attr);     // Right shadow
+        osd_putchar(dx + dw + 1, dy + i, '\xDB', shadow_attr); // Right shadow 2nd col
+    }
+
+    // Draw dialog box with full red background
+    uint8_t dialog_attr = OSD_ATTR(OSD_WHITE, OSD_RED);
+    uint8_t title_attr = OSD_ATTR(OSD_YELLOW, OSD_RED);
+    osd_fill(dx, dy, dw, dh, ' ', dialog_attr);
+    osd_draw_box_titled(dx, dy, dw, dh, " Confirm ", title_attr);
+    osd_fill(dx + 1, dy + 1, dw - 2, dh - 2, ' ', dialog_attr);
+    osd_print(dx + 3, dy + 2, "Save settings and restart? (Y/N)", dialog_attr);
 }
 
 bool settingsui_handle_key(int keycode, bool is_down) {

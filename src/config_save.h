@@ -30,6 +30,9 @@ void config_set_cpu_gen(int gen);
 int config_get_fpu(void);
 void config_set_fpu(int enabled);
 
+int config_get_fill_cmos(void);
+void config_set_fill_cmos(int enabled);
+
 // Check if config has unsaved changes
 bool config_has_changes(void);
 

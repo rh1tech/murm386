@@ -571,9 +571,9 @@ static bool init_emulator(void) {
 
     // Initialize config save module with current values
     config_set_mem_size_mb(config.mem_size / (1024 * 1024));
-    config_set_vga_mem_kb(config.vga_mem_size / 1024);
     config_set_cpu_gen(config.cpu_gen);
     config_set_fpu(config.fpu);
+    config_set_fill_cmos(config.fill_cmos);
     config_clear_changes();
 
     // Load BIOS and reset
