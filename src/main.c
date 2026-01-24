@@ -15,6 +15,7 @@
 #include "hardware/vreg.h"
 #include "hardware/gpio.h"
 #include "hardware/flash.h"
+#include "hardware/watchdog.h"
 
 #include "hardware/structs/qmi.h"
 
@@ -632,6 +633,9 @@ static void show_welcome_screen(void) {
 
     osd_clear();
 
+    // Fill entire screen with black background
+    osd_fill(0, 0, OSD_COLS, OSD_ROWS, ' ', OSD_ATTR(OSD_WHITE, OSD_BLACK));
+
     // Draw shadow
     uint8_t shadow_attr = OSD_ATTR(OSD_DARKGRAY, OSD_BLACK);
     osd_fill(wx + 2, wy + wh, ww, 1, '\xDB', shadow_attr);
@@ -662,19 +666,19 @@ static void show_welcome_screen(void) {
              config_get_cpu_freq(), config_get_psram_freq());
     osd_print_center(wy + 7, hw_str, OSD_ATTR(OSD_LIGHTCYAN, OSD_BLUE));
 
-    // Platform
+    // Platform (green text)
 #ifdef BOARD_M1
-    osd_print_center(wy + 8, "Platform: M1", OSD_ATTR_DISABLED);
+    osd_print_center(wy + 8, "Platform: M1", OSD_ATTR(OSD_LIGHTGREEN, OSD_BLUE));
 #elif defined(BOARD_M2)
-    osd_print_center(wy + 8, "Platform: M2", OSD_ATTR_DISABLED);
+    osd_print_center(wy + 8, "Platform: M2", OSD_ATTR(OSD_LIGHTGREEN, OSD_BLUE));
 #else
-    osd_print_center(wy + 8, "Platform: Unknown", OSD_ATTR_DISABLED);
+    osd_print_center(wy + 8, "Platform: Unknown", OSD_ATTR(OSD_LIGHTGREEN, OSD_BLUE));
 #endif
 
     osd_show();
 
-    // Display for 5 seconds
-    sleep_ms(5000);
+    // Display for 7 seconds
+    sleep_ms(7000);
 
     osd_hide();
 }
@@ -904,12 +908,12 @@ int main(void) {
             load_bios_and_reset(pc);
         }
 
-        // Check for settings UI restart request
+        // Check for settings UI restart request (requires full RP reset)
         if (settingsui_restart_requested()) {
             settingsui_clear_restart();
-            DBG_PRINT("Settings changed - triggering restart...\n");
-            // Full system reset with new configuration
-            load_bios_and_reset(pc);
+            DBG_PRINT("Settings changed - triggering RP reset...\n");
+            // Full hardware reset via watchdog
+            watchdog_reboot(0, 0, 0);
         }
 
         // Check for shutdown

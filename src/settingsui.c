@@ -43,8 +43,8 @@ static const int cpu_option_count = 3;
 static const int cpu_freq_options[] = { 504, 378 };
 static const int cpu_freq_option_count = 2;
 
-static const int psram_freq_options[] = { 166, 133, 100 };
-static const int psram_freq_option_count = 3;
+static const int psram_freq_options[] = { 166, 133 };
+static const int psram_freq_option_count = 2;
 
 // State
 static SettingsState settings_state = SETTINGS_CLOSED;

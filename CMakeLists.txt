@@ -259,6 +259,7 @@ target_link_libraries(murm386
     hardware_clocks
     hardware_vreg
     hardware_flash
+    hardware_watchdog
     hardware_irq
     fatfs
     sdcard

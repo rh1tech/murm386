@@ -123,7 +123,7 @@ static void draw_main_menu(void) {
             truncated[23] = '\0';
             osd_print(MENU_X + 20, y, truncated, attr);
         } else {
-            osd_print(MENU_X + 20, y, "[empty]", OSD_ATTR_DISABLED);
+            osd_print(MENU_X + 20, y, "[empty]", OSD_ATTR(OSD_LIGHTGRAY, OSD_BLUE));
         }
 
         // Action hint
