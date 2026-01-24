@@ -121,7 +121,7 @@ static uint8_t cga_palette[4];
 static int current_mode = 1;  // Default text mode
 static volatile int pending_mode = -1;  // Pending mode change (-1 = none)
 
-// Graphics sub-mode: 1=CGA, 2=EGA planar, 3=VGA 256-color
+// Graphics sub-mode: 1=CGA 4-color, 2=EGA planar, 3=VGA 256-color, 4=CGA 2-color
 static int gfx_submode = 3;
 static int gfx_width = 320;
 static int gfx_height = 200;
@@ -357,7 +357,7 @@ static void __time_critical_func(render_gfx_line_from_sram)(uint32_t line, uint3
 // VGA stores CGA data in odd/even mode with interleaved planes
 static void __time_critical_func(render_gfx_line_cga)(uint32_t line, uint32_t *output_buffer) {
     uint32_t *out32 = output_buffer + SHIFT_PICTURE / 4;
-    
+
     // CGA 320x200 mode (doubled to 640x400)
     uint32_t src_line = line / 2;
     if (src_line >= 200) {
@@ -372,29 +372,84 @@ static void __time_critical_func(render_gfx_line_cga)(uint32_t line, uint32_t *o
         uint32_t cga_bank = (src_line & 1) ? 0x2000 : 0x0000;
         uint32_t cga_row = src_line >> 1;  // Which row within bank (0-99)
         uint32_t cga_line_offset = cga_bank + cga_row * 80;
-        
+
         const uint8_t *src = gfx_display_buffer;
-        
+
         // In CGA/odd-even mode, data is stored linearly in planes 0 and 1
         // Even bytes go to plane 0, odd bytes go to plane 1
         // VGA address = ((cga_addr & ~1) << 1) | (cga_addr & 1)
         // This spreads byte pairs across 4-byte boundaries
-        
+
         // 80 bytes per CGA scanline = 320 pixels, doubled to 640
         for (int i = 0; i < 80; i++) {
             uint32_t cga_addr = cga_line_offset + i;
             uint32_t vga_addr = ((cga_addr & ~1) << 1) | (cga_addr & 1);
             uint8_t byte = src[vga_addr];
-            
+
             // Extract 4 pixels (2 bits each), MSB first
             uint8_t p0 = cga_palette[(byte >> 6) & 3];
             uint8_t p1 = cga_palette[(byte >> 4) & 3];
             uint8_t p2 = cga_palette[(byte >> 2) & 3];
             uint8_t p3 = cga_palette[byte & 3];
-            
+
             // Double each pixel horizontally (4 pixels -> 8 output pixels)
             *out32++ = (p0) | (p0 << 8) | (p1 << 16) | (p1 << 24);
             *out32++ = (p2) | (p2 << 8) | (p3 << 16) | (p3 << 24);
+        }
+    }
+}
+
+// Render CGA 2-color graphics line (640x200, 1 bit per pixel, interleaved)
+// Mode 6: 640x200 monochrome CGA mode
+// Memory layout: planar (4 bytes per screen byte), plane 0 only contains data
+// Row interleaving: even rows at bank 0, odd rows at bank 1 (0x2000 offset)
+static void __time_critical_func(render_gfx_line_cga2)(uint32_t line, uint32_t *output_buffer) {
+    uint32_t *out32 = output_buffer + SHIFT_PICTURE / 4;
+
+    // CGA 640x200 mode (doubled to 640x400)
+    uint32_t src_line = line / 2;
+    if (src_line >= 200) {
+        // Blank line
+        for (int i = 0; i < 160; i++) {
+            *out32++ = (TMPL_LINE) | (TMPL_LINE << 8) | (TMPL_LINE << 16) | (TMPL_LINE << 24);
+        }
+    } else {
+        // CGA interleaved scanlines:
+        // Even lines (0,2,4,...) at offset 0x0000
+        // Odd lines (1,3,5,...) at offset 0x2000 (which is 0x800 words)
+        // Each "byte" of screen data is stored at 4-byte boundaries (planar layout)
+        uint32_t bank_offset = (src_line & 1) ? 0x2000 : 0x0000;
+        uint32_t row_in_bank = src_line >> 1;  // Which row within bank (0-99)
+        // Base address for this scanline (in bytes): bank + row * 80 bytes/row
+        // In planar layout: multiply by 4 to get actual byte offset
+        uint32_t base_addr = (bank_offset + row_in_bank * 80) * 4;
+
+        const uint8_t *src = gfx_display_buffer;
+
+        // CGA 2-color palette: 0 = black, 1 = white (or foreground color)
+        uint8_t bg = cga_palette[0];  // Background (black)
+        uint8_t fg = cga_palette[3];  // Foreground (white)
+
+        // 80 bytes per CGA scanline = 640 pixels (1 bit per pixel)
+        // Data is in plane 0 (every 4th byte in planar layout)
+        for (int i = 0; i < 80; i++) {
+            // In planar layout, plane 0 is at offset 0, 4, 8, 12, ...
+            uint8_t byte = src[base_addr + i * 4];
+
+            // Extract 8 pixels (1 bit each), MSB first
+            // Output directly (no horizontal doubling since 640 is native width)
+            uint8_t p0 = (byte & 0x80) ? fg : bg;
+            uint8_t p1 = (byte & 0x40) ? fg : bg;
+            uint8_t p2 = (byte & 0x20) ? fg : bg;
+            uint8_t p3 = (byte & 0x10) ? fg : bg;
+            uint8_t p4 = (byte & 0x08) ? fg : bg;
+            uint8_t p5 = (byte & 0x04) ? fg : bg;
+            uint8_t p6 = (byte & 0x02) ? fg : bg;
+            uint8_t p7 = (byte & 0x01) ? fg : bg;
+
+            // 8 pixels = 8 bytes = 2 x uint32_t (no doubling)
+            *out32++ = (p0) | (p1 << 8) | (p2 << 16) | (p3 << 24);
+            *out32++ = (p4) | (p5 << 8) | (p6 << 16) | (p7 << 24);
         }
     }
 }
@@ -428,21 +483,30 @@ static void __time_critical_func(render_gfx_line_ega)(uint32_t line, uint32_t *o
 
     // Determine source line with appropriate scaling
     // 400 display lines -> gfx_height source lines
+    // gfx_height is the actual number of unique scanlines in VRAM
     uint32_t src_line;
-    if (gfx_height <= 200) {
+    int height = gfx_height > 0 ? gfx_height : 200;
+
+    // Calculate vertical scale factor: how many display lines per source line
+    // For 400 display lines and 200 source lines: scale = 2 (double each line)
+    // For 400 display lines and 100 source lines: scale = 4 (quadruple each line)
+    // For 400 display lines and 350 source lines: scale ≈ 1.14
+    if (height <= 100) {
+        // Very low res (e.g., 640x100 doubled twice): each source line shows 4x
+        src_line = line >> 2;
+    } else if (height <= 200) {
         // 200-line mode: double vertically (400/2 = 200)
         src_line = line >> 1;
-    } else if (gfx_height <= 350) {
+    } else if (height <= 350) {
         // 350-line mode: map 400 display lines to 350 source lines
         // Scale: src = line * 350 / 400 = line * 7 / 8
-        src_line = (line * 7) >> 3;
+        src_line = (line * height) / N_LINES_VISIBLE;
     } else {
         // 400-line mode: 1:1 mapping
         src_line = line;
     }
 
     // Check if source line is beyond the actual height
-    int height = gfx_height > 0 ? gfx_height : 200;
     if (src_line >= (uint32_t)height) {
         // Blank line - fast fill
         uint32_t blank = TMPL_LINE | (TMPL_LINE << 8) | (TMPL_LINE << 16) | (TMPL_LINE << 24);
@@ -565,6 +629,9 @@ static void __time_critical_func(render_line)(uint32_t line, uint32_t *output_bu
         } else if (gfx_submode == 2) {
             // EGA planar 16-color
             render_gfx_line_ega(line, output_buffer);
+        } else if (gfx_submode == 4) {
+            // CGA 2-color (640x200 monochrome)
+            render_gfx_line_cga2(line, output_buffer);
         } else {
             // VGA 256-color (mode 13h) - default
             render_gfx_line_from_sram(line, output_buffer);
@@ -867,7 +934,7 @@ void vga_hw_set_palette16(const uint8_t *palette16_data) {
     }
 }
 
-// Set graphics sub-mode: 1=CGA, 2=EGA planar, 3=VGA 256-color
+// Set graphics sub-mode: 1=CGA 4-color, 2=EGA planar, 3=VGA 256-color, 4=CGA 2-color
 void vga_hw_set_gfx_mode(int submode, int width, int height, int line_offset) {
     gfx_submode = submode;
     gfx_width = width;
@@ -938,8 +1005,8 @@ void vga_hw_update(void) {
             const uint32_t *src = (const uint32_t *)vga_ram_psram;
             uint32_t *dst = (uint32_t *)gfx_write_buffer;
             
-            if (gfx_submode == 1) {
-                // CGA 4-color: copy 32KB
+            if (gfx_submode == 1 || gfx_submode == 4) {
+                // CGA 4-color or 2-color: copy 32KB (same memory layout)
                 memcpy(dst, src, GFX_BUFFER_SIZE);
                 gfx_prerender_count += 200;
             } else if (gfx_submode == 2) {
