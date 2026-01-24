@@ -8,6 +8,7 @@
 
 #include "tusb.h"
 #include "usbhid.h"
+#include "debug.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -200,11 +201,11 @@ static void process_generic_report(uint8_t dev_addr, uint8_t instance, uint8_t c
 void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_report, uint16_t desc_len) {
     uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
 
-    printf("USB HID device mounted: dev=%d inst=%d protocol=%d\n", dev_addr, instance, itf_protocol);
+    DBG_PRINT("USB HID device mounted: dev=%d inst=%d protocol=%d\n", dev_addr, instance, itf_protocol);
 
     if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD) {
         keyboard_connected = 1;
-        printf("  USB Keyboard connected!\n");
+        DBG_PRINT("  USB Keyboard connected!\n");
     }
 
     // Parse generic report descriptor for non-boot protocol devices
@@ -215,7 +216,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_re
 
     // Request to receive reports
     if (!tuh_hid_receive_report(dev_addr, instance)) {
-        printf("  Failed to request HID report\n");
+        DBG_PRINT("  Failed to request HID report\n");
     }
 }
 
@@ -223,11 +224,11 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_re
 void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance) {
     uint8_t const itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
 
-    printf("USB HID device unmounted: dev=%d inst=%d\n", dev_addr, instance);
+    DBG_PRINT("USB HID device unmounted: dev=%d inst=%d\n", dev_addr, instance);
 
     if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD) {
         keyboard_connected = 0;
-        printf("  USB Keyboard disconnected\n");
+        DBG_PRINT("  USB Keyboard disconnected\n");
     }
 }
 
@@ -266,7 +267,7 @@ void usbhid_init(void) {
     key_action_tail = 0;
     keyboard_connected = 0;
 
-    printf("USB HID Host initialized\n");
+    DBG_PRINT("USB HID Host initialized\n");
 }
 
 void usbhid_task(void) {

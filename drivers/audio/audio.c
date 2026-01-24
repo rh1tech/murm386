@@ -13,6 +13,7 @@
 #include "audio.h"
 #include "board_config.h"
 #include "audio_i2s.pio.h"
+#include "debug.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -84,8 +85,8 @@ i2s_config_t i2s_get_default_config(void) {
 }
 
 void i2s_init(i2s_config_t *config) {
-    printf("Audio: Initializing I2S with chained double-buffer DMA...\n");
-    printf("Audio: Sample rate: %u Hz, DMA buffer size: %lu frames\n",
+    DBG_PRINT("Audio: Initializing I2S with chained double-buffer DMA...\n");
+    DBG_PRINT("Audio: Sample rate: %u Hz, DMA buffer size: %lu frames\n",
            (unsigned)config->sample_freq, (unsigned long)config->dma_trans_count);
 
     audio_pio = config->pio;
@@ -106,7 +107,7 @@ void i2s_init(i2s_config_t *config) {
     // Claim state machine
     audio_sm = pio_claim_unused_sm(audio_pio, true);
     config->sm = audio_sm;
-    printf("Audio: Using PIO0 SM%d\n", audio_sm);
+    DBG_PRINT("Audio: Using PIO0 SM%d\n", audio_sm);
 
     // Add PIO program
     uint offset = pio_add_program(audio_pio, &audio_i2s_program);
@@ -120,7 +121,7 @@ void i2s_init(i2s_config_t *config) {
     uint32_t sys_clk = clock_get_hz(clk_sys);
     uint32_t divider = sys_clk * 4 / config->sample_freq;
     pio_sm_set_clkdiv_int_frac(audio_pio, audio_sm, divider >> 8u, divider & 0xffu);
-    printf("Audio: Clock divider: %u.%u (sys=%lu MHz)\n",
+    DBG_PRINT("Audio: Clock divider: %u.%u (sys=%lu MHz)\n",
            (unsigned)(divider >> 8u), (unsigned)(divider & 0xffu), (unsigned long)(sys_clk / 1000000));
 
     // Validate transfer count fits our static buffers
@@ -147,7 +148,7 @@ void i2s_init(i2s_config_t *config) {
     dma_channel_a = AUDIO_DMA_CH_A;
     dma_channel_b = AUDIO_DMA_CH_B;
     config->dma_channel = (uint8_t)dma_channel_a;
-    printf("Audio: Using DMA channels %d/%d (IRQ=%d)\n", dma_channel_a, dma_channel_b, AUDIO_DMA_IRQ);
+    DBG_PRINT("Audio: Using DMA channels %d/%d (IRQ=%d)\n", dma_channel_a, dma_channel_b, AUDIO_DMA_IRQ);
 
     // Configure DMA channels in ping-pong chain
     dma_channel_config cfg_a = dma_channel_get_default_config(dma_channel_a);
@@ -201,7 +202,7 @@ void i2s_init(i2s_config_t *config) {
     dma_buffers_free_mask = (1u << DMA_BUFFER_COUNT) - 1u; // both free
     audio_running = false;
 
-    printf("Audio: I2S ready (double buffer DMA with %d buffer pre-roll)\n", PREROLL_BUFFERS);
+    DBG_PRINT("Audio: I2S ready (double buffer DMA with %d buffer pre-roll)\n", PREROLL_BUFFERS);
 }
 
 static bool pio_sm_enabled = false;

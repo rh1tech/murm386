@@ -32,6 +32,7 @@
 
 #include "pc.h"
 #include "ini.h"
+#include "debug.h"
 
 //=============================================================================
 // Version Information
@@ -124,19 +125,19 @@ int load_rom(void *phys_mem, const char *file, uword addr, int backward) {
     if (backward) {
         // Load so ROM ends at addr (for BIOS - should end at 1MB boundary)
         dest = (uint8_t *)phys_mem + addr - size;
-        printf("Loading ROM: %s (%lu bytes) at 0x%08lx-0x%08lx (dest=%p)\n",
+        DBG_PRINT("Loading ROM: %s (%lu bytes) at 0x%08lx-0x%08lx (dest=%p)\n",
                file, (unsigned long)size,
                (unsigned long)(addr - size), (unsigned long)(addr - 1), dest);
     } else {
         dest = (uint8_t *)phys_mem + addr;
-        printf("Loading ROM: %s (%lu bytes) at 0x%08lx (dest=%p)\n",
+        DBG_PRINT("Loading ROM: %s (%lu bytes) at 0x%08lx (dest=%p)\n",
                file, (unsigned long)size, (unsigned long)addr, dest);
     }
 
     res = f_read(&fp, dest, size, &bytes_read);
     if (res != FR_OK || bytes_read != size) {
         f_close(&fp);
-        printf("Failed to read ROM: %s (error %d, read %u of %lu)\n",
+        printf("ERROR: Failed to read ROM: %s (error %d, read %u of %lu)\n",
                file, res, bytes_read, (unsigned long)size);
         return -1;
     }
@@ -144,10 +145,10 @@ int load_rom(void *phys_mem, const char *file, uword addr, int backward) {
     f_close(&fp);
 
     // Debug: verify data was written to memory
-    printf("  First bytes: %02x %02x %02x %02x %02x %02x %02x %02x\n",
+    DBG_PRINT("  First bytes: %02x %02x %02x %02x %02x %02x %02x %02x\n",
            dest[0], dest[1], dest[2], dest[3],
            dest[4], dest[5], dest[6], dest[7]);
-    printf("  Last bytes:  %02x %02x %02x %02x %02x %02x %02x %02x\n",
+    DBG_PRINT("  Last bytes:  %02x %02x %02x %02x %02x %02x %02x %02x\n",
            dest[size-8], dest[size-7], dest[size-6], dest[size-5],
            dest[size-4], dest[size-3], dest[size-2], dest[size-1]);
 
@@ -247,25 +248,25 @@ static int load_config_from_sd(const char *filename) {
     FILINFO fno;
 
     // Debug: List 386 directory contents
-    printf("Checking SD card contents...\n");
+    DBG_PRINT("Checking SD card contents...\n");
     res = f_opendir(&dir, "386");
     if (res == FR_OK) {
-        printf("  386/ directory found, contents:\n");
+        DBG_PRINT("  386/ directory found, contents:\n");
         while (f_readdir(&dir, &fno) == FR_OK && fno.fname[0] != 0) {
-            printf("    %s%s (%lu bytes)\n",
+            DBG_PRINT("    %s%s (%lu bytes)\n",
                    fno.fname,
                    (fno.fattrib & AM_DIR) ? "/" : "",
                    (unsigned long)fno.fsize);
         }
         f_closedir(&dir);
     } else {
-        printf("  386/ directory not found (error %d)\n", res);
+        DBG_PRINT("  386/ directory not found (error %d)\n", res);
         // Try root directory
         res = f_opendir(&dir, "");
         if (res == FR_OK) {
-            printf("  Root directory contents:\n");
+            DBG_PRINT("  Root directory contents:\n");
             while (f_readdir(&dir, &fno) == FR_OK && fno.fname[0] != 0) {
-                printf("    %s%s\n", fno.fname, (fno.fattrib & AM_DIR) ? "/" : "");
+                DBG_PRINT("    %s%s\n", fno.fname, (fno.fattrib & AM_DIR) ? "/" : "");
             }
             f_closedir(&dir);
         }
@@ -276,11 +277,11 @@ static int load_config_from_sd(const char *filename) {
 
     res = f_open(&fp, path, FA_READ);
     if (res != FR_OK) {
-        printf("Config file not found: %s (error %d)\n", path, res);
+        DBG_PRINT("Config file not found: %s (error %d)\n", path, res);
         return -1;
     }
 
-    printf("Loading config: %s\n", path);
+    DBG_PRINT("Loading config: %s\n", path);
 
     // Read entire file
     FSIZE_t size = f_size(&fp);
@@ -341,7 +342,7 @@ static void __no_inline_not_in_flash_func(set_flash_timings)(int cpu_mhz) {
 static void configure_clocks(void) {
 #if CPU_CLOCK_MHZ > 252
     // Overclock: disable voltage limit and set higher voltage
-    printf("Configuring overclock: %d MHz @ %s\n", CPU_CLOCK_MHZ,
+    DBG_PRINT("Configuring overclock: %d MHz @ %s\n", CPU_CLOCK_MHZ,
            CPU_CLOCK_MHZ >= 504 ? "1.65V" :
            CPU_CLOCK_MHZ >= 378 ? "1.60V" : "1.50V");
 
@@ -356,7 +357,7 @@ static void configure_clocks(void) {
     // Set system clock
     set_sys_clock_khz(CPU_CLOCK_MHZ * 1000, false);
 
-    printf("System clock: %lu MHz\n", clock_get_hz(clk_sys) / 1000000);
+    DBG_PRINT("System clock: %lu MHz\n", clock_get_hz(clk_sys) / 1000000);
 }
 
 //=============================================================================
@@ -368,47 +369,45 @@ static bool init_hardware(void) {
     configure_clocks();
 
     // Initialize PSRAM
-    printf("Initializing PSRAM...\n");
+    DBG_PRINT("Initializing PSRAM...\n");
     uint psram_pin = get_psram_pin();
-    printf("  PSRAM CS pin: GPIO%d\n", psram_pin);
+    DBG_PRINT("  PSRAM CS pin: GPIO%d\n", psram_pin);
     psram_init(psram_pin);
 
     if (!psram_test()) {
         printf("ERROR: PSRAM test failed!\n");
         return false;
     }
-    printf("  PSRAM test passed (8MB)\n");
+    DBG_PRINT("  PSRAM test passed (8MB)\n");
 
     // Initialize SD card
-    printf("Initializing SD card...\n");
+    DBG_PRINT("Initializing SD card...\n");
     FRESULT res = f_mount(&fatfs, "", 1);
     if (res != FR_OK) {
         printf("ERROR: Failed to mount SD card (error %d)\n", res);
         return false;
     }
-    printf("  SD card mounted\n");
+    DBG_PRINT("  SD card mounted\n");
 
     // Initialize PS/2 keyboard
-    printf("Initializing PS/2 keyboard...\n");
-    printf("  CLK: GPIO%d, DATA: GPIO%d\n", PS2_PIN_CLK, PS2_PIN_DATA);
+    DBG_PRINT("Initializing PS/2 keyboard...\n");
+    DBG_PRINT("  CLK: GPIO%d, DATA: GPIO%d\n", PS2_PIN_CLK, PS2_PIN_DATA);
     ps2kbd_init(PS2_PIN_CLK);
 
     // Initialize USB HID keyboard (if enabled)
 #ifdef USB_HID_ENABLED
-    printf("Initializing USB HID keyboard...\n");
+    DBG_PRINT("Initializing USB HID keyboard...\n");
     usbkbd_init();
-#else
-    printf("USB HID keyboard: disabled (use -DUSB_HID_ENABLED=1 to enable)\n");
 #endif
 
     // Initialize VGA
-    printf("Initializing VGA...\n");
-    printf("  Base pin: GPIO%d\n", VGA_BASE_PIN);
+    DBG_PRINT("Initializing VGA...\n");
+    DBG_PRINT("  Base pin: GPIO%d\n", VGA_BASE_PIN);
     vga_hw_init();
 
     // Initialize I2S Audio
-    printf("Initializing I2S Audio...\n");
-    printf("  DATA: GPIO%d, CLK: GPIO%d, LRCK: GPIO%d\n",
+    DBG_PRINT("Initializing I2S Audio...\n");
+    DBG_PRINT("  DATA: GPIO%d, CLK: GPIO%d, LRCK: GPIO%d\n",
            I2S_DATA_PIN, I2S_CLOCK_PIN_BASE, I2S_CLOCK_PIN_BASE + 1);
     if (!audio_init()) {
         printf("WARNING: Audio initialization failed\n");
@@ -427,32 +426,32 @@ static bool init_emulator(void) {
 
     // Try to load config from SD card
     if (load_config_from_sd("config.ini") != 0) {
-        printf("Using default configuration\n");
+        DBG_PRINT("Using default configuration\n");
     }
 
-    printf("\nEmulator configuration:\n");
-    printf("  Memory: %ld MB\n", config.mem_size / (1024 * 1024));
-    printf("  VGA Memory: %ld KB\n", config.vga_mem_size / 1024);
-    printf("  CPU: %d86\n", config.cpu_gen);
-    printf("  BIOS: %s\n", config.bios ? config.bios : "(none)");
-    printf("  VGA BIOS: %s\n", config.vga_bios ? config.vga_bios : "(none)");
-    printf("  Floppy A: %s\n", config.fdd[0] ? config.fdd[0] : "(none)");
-    printf("  Floppy B: %s\n", config.fdd[1] ? config.fdd[1] : "(none)");
+    DBG_PRINT("\nEmulator configuration:\n");
+    DBG_PRINT("  Memory: %ld MB\n", config.mem_size / (1024 * 1024));
+    DBG_PRINT("  VGA Memory: %ld KB\n", config.vga_mem_size / 1024);
+    DBG_PRINT("  CPU: %d86\n", config.cpu_gen);
+    DBG_PRINT("  BIOS: %s\n", config.bios ? config.bios : "(none)");
+    DBG_PRINT("  VGA BIOS: %s\n", config.vga_bios ? config.vga_bios : "(none)");
+    DBG_PRINT("  Floppy A: %s\n", config.fdd[0] ? config.fdd[0] : "(none)");
+    DBG_PRINT("  Floppy B: %s\n", config.fdd[1] ? config.fdd[1] : "(none)");
 
     // Calculate total PSRAM needed
     size_t total_psram = config.mem_size + config.vga_mem_size;
-    printf("  PSRAM needed: %lu KB (available: %lu KB)\n",
+    DBG_PRINT("  PSRAM needed: %lu KB (available: %lu KB)\n",
            (unsigned long)(total_psram / 1024),
            (unsigned long)(PSRAM_SIZE_BYTES / 1024));
 
     if (total_psram > PSRAM_SIZE_BYTES) {
         printf("WARNING: Reducing memory to fit in PSRAM\n");
         config.mem_size = PSRAM_SIZE_BYTES - config.vga_mem_size - (64 * 1024);  // Leave 64KB margin
-        printf("  Adjusted memory: %ld MB\n", config.mem_size / (1024 * 1024));
+        DBG_PRINT("  Adjusted memory: %ld MB\n", config.mem_size / (1024 * 1024));
     }
 
     // Create PC instance
-    printf("\nCreating PC instance...\n");
+    DBG_PRINT("\nCreating PC instance...\n");
     pc = pc_new(vga_redraw, platform_poll, NULL, NULL, &config);
     if (!pc) {
         printf("ERROR: Failed to create PC instance\n");
@@ -461,10 +460,10 @@ static bool init_emulator(void) {
 
     // Set VGA VRAM pointer (VGA memory is allocated by pc_new)
     vga_hw_set_vram((uint8_t *)pc->vga_mem);
-    printf("  VGA VRAM set to 0x%08lx\n", (unsigned long)pc->vga_mem);
+    DBG_PRINT("  VGA VRAM set to 0x%08lx\n", (unsigned long)pc->vga_mem);
 
     // Load BIOS and reset
-    printf("Loading BIOS...\n");
+    DBG_PRINT("Loading BIOS...\n");
     load_bios_and_reset(pc);
 
     return true;
@@ -475,7 +474,7 @@ static bool init_emulator(void) {
 //=============================================================================
 
 static void core1_entry(void) {
-    printf("[Core 1] VGA rendering + Audio started\n");
+    DBG_PRINT("[Core 1] VGA rendering + Audio started\n");
 
     while (true) {
         // VGA driver handles rendering in DMA IRQ
@@ -503,17 +502,17 @@ int main(void) {
     // Initialize stdio (USB Serial or UART depending on USB HID mode)
     stdio_init_all();
 
-    printf("\n\n");
-    printf("============================================\n");
-    printf("  murm386 - 386 Emulator for RP2350\n");
-    printf("  Version %s\n", MURM386_VERSION);
-    printf("============================================\n\n");
+    DBG_PRINT("\n\n");
+    DBG_PRINT("============================================\n");
+    DBG_PRINT("  murm386 - 386 Emulator for RP2350\n");
+    DBG_PRINT("  Version %s\n", MURM386_VERSION);
+    DBG_PRINT("============================================\n\n");
 
 #ifndef USB_HID_ENABLED
     // Wait for USB Serial connection (with timeout)
     // Only when USB CDC is enabled (USB HID disabled)
-    printf("Waiting for USB Serial connection...\n");
-    printf("(Press any key or wait %d seconds)\n\n", USB_CONSOLE_DELAY_MS / 1000);
+    DBG_PRINT("Waiting for USB Serial connection...\n");
+    DBG_PRINT("(Press any key or wait %d seconds)\n\n", USB_CONSOLE_DELAY_MS / 1000);
 
     absolute_time_t deadline = make_timeout_time_ms(USB_CONSOLE_DELAY_MS);
     while (!stdio_usb_connected() && !time_reached(deadline)) {
@@ -521,28 +520,28 @@ int main(void) {
     }
 
     if (stdio_usb_connected()) {
-        printf("USB Serial connected!\n\n");
+        DBG_PRINT("USB Serial connected!\n\n");
     } else {
-        printf("Timeout - continuing without USB Serial\n\n");
+        DBG_PRINT("Timeout - continuing without USB Serial\n\n");
     }
 #else
     // USB HID mode: using UART for debug output
-    printf("USB HID mode: USB port used for keyboard input\n");
-    printf("Debug output via UART\n\n");
+    DBG_PRINT("USB HID mode: USB port used for keyboard input\n");
+    DBG_PRINT("Debug output via UART\n\n");
 #endif
 
     // Print board configuration
-    printf("Board Configuration:\n");
+    DBG_PRINT("Board Configuration:\n");
 #ifdef BOARD_M1
-    printf("  Board: M1\n");
+    DBG_PRINT("  Board: M1\n");
 #elif defined(BOARD_M2)
-    printf("  Board: M2\n");
+    DBG_PRINT("  Board: M2\n");
 #else
-    printf("  Board: Unknown\n");
+    DBG_PRINT("  Board: Unknown\n");
 #endif
-    printf("  CPU Speed: %d MHz\n", CPU_CLOCK_MHZ);
-    printf("  PSRAM Speed: %d MHz\n", PSRAM_MAX_FREQ_MHZ);
-    printf("\n");
+    DBG_PRINT("  CPU Speed: %d MHz\n", CPU_CLOCK_MHZ);
+    DBG_PRINT("  PSRAM Speed: %d MHz\n", PSRAM_MAX_FREQ_MHZ);
+    DBG_PRINT("\n");
 
     // Initialize hardware
     if (!init_hardware()) {
@@ -564,7 +563,7 @@ int main(void) {
     multicore_launch_core1(core1_entry);
 
     initialized = true;
-    printf("\nStarting emulation...\n");
+    DBG_PRINT("\nStarting emulation...\n");
 
     // VGA update timing
     uint64_t last_vga_update = 0;
@@ -723,7 +722,7 @@ int main(void) {
         }
     }
 
-    printf("\nEmulation stopped.\n");
+    DBG_PRINT("\nEmulation stopped.\n");
 
     while (true) {
         sleep_ms(1000);
