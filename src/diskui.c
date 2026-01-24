@@ -7,6 +7,7 @@
 #include "diskui.h"
 #include "vga_osd.h"
 #include "disk.h"
+#include "config_save.h"
 #include "ff.h"
 #include <string.h>
 #include <strings.h>  // For strcasecmp
@@ -256,6 +257,8 @@ static void select_file(void) {
         if (drive_info[selected_drive].is_cdrom) {
             disk_set_cdrom(selected_drive, 1);
         }
+        // Save disk configuration to INI file
+        config_save_disks();
     }
 
     // Return to main menu
@@ -265,6 +268,8 @@ static void select_file(void) {
 
 static void eject_disk(void) {
     disk_eject(selected_drive);
+    // Save disk configuration to INI file
+    config_save_disks();
     draw_main_menu();
 }
 
