@@ -282,6 +282,11 @@ static void dma_cmd8 (SB16State *s, int mask, int dma_len)
             s->freq, s->fmt_stereo, s->fmt_signed, s->fmt_bits,
             s->block_size, s->dma_auto, s->fifo, s->highspeed);
 
+    /* Flush audio buffer for single-shot mode to prevent replaying old samples */
+    if (!s->dma_auto) {
+        s->audio_p = s->audio_q;
+    }
+
     continue_dma8 (s);
     speaker (s, 1);
 }
@@ -360,6 +365,11 @@ static void dma_cmd (SB16State *s, uint8_t cmd, uint8_t d0, int dma_len)
     if (s->freq) {
         set_audio(s, s->fmt, s->freq, 1 << s->fmt_stereo);
         s->voice = s;
+    }
+
+    /* Flush audio buffer for single-shot mode to prevent replaying old samples */
+    if (!s->dma_auto) {
+        s->audio_p = s->audio_q;
     }
 
     control (s, 1);
