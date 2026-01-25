@@ -3878,19 +3878,19 @@ static bool IRAM_ATTR_CPU_EXEC1 cpu_exec1(CPUI386 *cpu, int stepcount)
 /* 0x10 */	&&f0x10, &&f0x11, &&f0x12, &&f0x13, &&f0x14, &&f0x15, &&f0x16, &&f0x17,
 /* 0x18 */	&&f0x18, &&f0x19, &&f0x1a, &&f0x1b, &&f0x1c, &&f0x1d, &&f0x1e, &&f0x1f,
 /* 0x20 */	&&f0x20, &&f0x21, &&f0x22, &&f0x23, &&f0x24, &&f0x25, &&pfx26, &&f0x27,
-/* 0x28 */	&&f0x28, &&f0x29, &&f0x2a, &&f0x2b, &&f0x2c, &&f0x2d, &&pfx2e, &&f0x2f,
+/* 0x28 */	&&f0x28, &&f0x29_fast, &&f0x2a, &&f0x2b_fast, &&f0x2c, &&f0x2d, &&pfx2e, &&f0x2f,
 /* 0x30 */	&&f0x30, &&f0x31_fast, &&f0x32, &&f0x33_fast, &&f0x34, &&f0x35, &&pfx36, &&f0x37,
 /* 0x38 */	&&f0x38, &&f0x39_fast, &&f0x3a, &&f0x3b_fast, &&f0x3c, &&f0x3d, &&pfx3e, &&f0x3f,
-/* 0x40 */	&&f0x40, &&f0x41, &&f0x42, &&f0x43, &&f0x44, &&f0x45, &&f0x46, &&f0x47,
-/* 0x48 */	&&f0x48, &&f0x49, &&f0x4a, &&f0x4b, &&f0x4c, &&f0x4d, &&f0x4e, &&f0x4f,
+/* 0x40 */	&&f0x40_fast, &&f0x41_fast, &&f0x42_fast, &&f0x43_fast, &&f0x44_fast, &&f0x45_fast, &&f0x46_fast, &&f0x47_fast,
+/* 0x48 */	&&f0x48_fast, &&f0x49_fast, &&f0x4a_fast, &&f0x4b_fast, &&f0x4c_fast, &&f0x4d_fast, &&f0x4e_fast, &&f0x4f_fast,
 /* 0x50 */	&&f0x50, &&f0x51, &&f0x52, &&f0x53, &&f0x54, &&f0x55, &&f0x56, &&f0x57,
 /* 0x58 */	&&f0x58, &&f0x59, &&f0x5a, &&f0x5b, &&f0x5c, &&f0x5d, &&f0x5e, &&f0x5f,
 /* 0x60 */	&&f0x60, &&f0x61, &&f0x62, &&f0x63, &&pfx64, &&pfx65, &&pfx66, &&pfx67,
 /* 0x68 */	&&f0x68, &&f0x69, &&f0x6a, &&f0x6b, &&f0x6c, &&f0x6d, &&f0x6e, &&f0x6f,
 /* 0x70 */	&&f0x70, &&f0x71, &&f0x72, &&f0x73, &&f0x74_fast, &&f0x75_fast, &&f0x76, &&f0x77,
 /* 0x78 */	&&f0x78, &&f0x79, &&f0x7a, &&f0x7b, &&f0x7c, &&f0x7d, &&f0x7e, &&f0x7f,
-/* 0x80 */	&&f0x80, &&f0x81, &&f0x82, &&f0x83, &&f0x84, &&f0x85, &&f0x86, &&f0x87,
-/* 0x88 */	&&f0x88, &&f0x89_fast, &&f0x8a, &&f0x8b_fast, &&f0x8c, &&f0x8d, &&f0x8e, &&f0x8f,
+/* 0x80 */	&&f0x80, &&f0x81, &&f0x82, &&f0x83_fast, &&f0x84, &&f0x85_fast, &&f0x86, &&f0x87,
+/* 0x88 */	&&f0x88, &&f0x89_fast, &&f0x8a, &&f0x8b_fast, &&f0x8c, &&f0x8d_fast, &&f0x8e, &&f0x8f,
 /* 0x90 */	&&f0x90, &&f0x91, &&f0x92, &&f0x93, &&f0x94, &&f0x95, &&f0x96, &&f0x97,
 /* 0x98 */	&&f0x98, &&f0x99, &&f0x9a, &&f0x9b, &&f0x9c, &&f0x9d, &&f0x9e, &&f0x9f,
 /* 0xa0 */	&&f0xa0, &&f0xa1, &&f0xa2, &&f0xa3, &&f0xa4, &&f0xa5, &&f0xa6, &&f0xa7,
@@ -4297,6 +4297,318 @@ static bool IRAM_ATTR_CPU_EXEC1 cpu_exec1(CPUI386 *cpu, int stepcount)
 			cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
 		}
 		ebreak;
+	}
+
+	f0x29_fast: { // SUB r/m, r - optimized for reg-to-reg
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		if (likely((modrm & 0xC0) == 0xC0)) {
+			int reg = (modrm >> 3) & 7;
+			int rm = modrm & 7;
+			if (opsz16) {
+				cpu->cc.src1 = sext16(cpu->gprx[rm].r16);
+				cpu->cc.src2 = sext16(cpu->gprx[reg].r16);
+				cpu->cc.dst = sext16(cpu->cc.src1 - cpu->cc.src2);
+				cpu->gprx[rm].r16 = cpu->cc.dst;
+			} else {
+				cpu->cc.src1 = sext32(cpu->gprx[rm].r32);
+				cpu->cc.src2 = sext32(cpu->gprx[reg].r32);
+				cpu->cc.dst = sext32(cpu->cc.src1 - cpu->cc.src2);
+				cpu->gprx[rm].r32 = cpu->cc.dst;
+			}
+			cpu->cc.op = CC_SUB;
+			cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+			ebreak;
+		}
+		// Memory path
+		{
+			int reg = (modrm >> 3) & 7;
+			int mod = modrm >> 6;
+			int rm = modrm & 7;
+			TRY(modsib(cpu, adsz16, mod, rm, &addr, &curr_seg));
+			if (opsz16) {
+				TRY(translate16(cpu, &meml, 3, curr_seg, addr));
+				cpu->cc.src1 = sext16(laddr16(&meml));
+				cpu->cc.src2 = sext16(cpu->gprx[reg].r16);
+				cpu->cc.dst = sext16(cpu->cc.src1 - cpu->cc.src2);
+				saddr16(&meml, cpu->cc.dst);
+			} else {
+				TRY(translate32(cpu, &meml, 3, curr_seg, addr));
+				cpu->cc.src1 = sext32(laddr32(&meml));
+				cpu->cc.src2 = sext32(cpu->gprx[reg].r32);
+				cpu->cc.dst = sext32(cpu->cc.src1 - cpu->cc.src2);
+				saddr32(&meml, cpu->cc.dst);
+			}
+			cpu->cc.op = CC_SUB;
+			cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+		}
+		ebreak;
+	}
+
+	f0x2b_fast: { // SUB r, r/m - optimized for reg-to-reg
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		if (likely((modrm & 0xC0) == 0xC0)) {
+			int reg = (modrm >> 3) & 7;
+			int rm = modrm & 7;
+			if (opsz16) {
+				cpu->cc.src1 = sext16(cpu->gprx[reg].r16);
+				cpu->cc.src2 = sext16(cpu->gprx[rm].r16);
+				cpu->cc.dst = sext16(cpu->cc.src1 - cpu->cc.src2);
+				cpu->gprx[reg].r16 = cpu->cc.dst;
+			} else {
+				cpu->cc.src1 = sext32(cpu->gprx[reg].r32);
+				cpu->cc.src2 = sext32(cpu->gprx[rm].r32);
+				cpu->cc.dst = sext32(cpu->cc.src1 - cpu->cc.src2);
+				cpu->gprx[reg].r32 = cpu->cc.dst;
+			}
+			cpu->cc.op = CC_SUB;
+			cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+			ebreak;
+		}
+		// Memory path
+		{
+			int reg = (modrm >> 3) & 7;
+			int mod = modrm >> 6;
+			int rm = modrm & 7;
+			TRY(modsib(cpu, adsz16, mod, rm, &addr, &curr_seg));
+			if (opsz16) {
+				TRY(translate16(cpu, &meml, 1, curr_seg, addr));
+				cpu->cc.src1 = sext16(cpu->gprx[reg].r16);
+				cpu->cc.src2 = sext16(laddr16(&meml));
+				cpu->cc.dst = sext16(cpu->cc.src1 - cpu->cc.src2);
+				cpu->gprx[reg].r16 = cpu->cc.dst;
+			} else {
+				TRY(translate32(cpu, &meml, 1, curr_seg, addr));
+				cpu->cc.src1 = sext32(cpu->gprx[reg].r32);
+				cpu->cc.src2 = sext32(laddr32(&meml));
+				cpu->cc.dst = sext32(cpu->cc.src1 - cpu->cc.src2);
+				cpu->gprx[reg].r32 = cpu->cc.dst;
+			}
+			cpu->cc.op = CC_SUB;
+			cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+		}
+		ebreak;
+	}
+
+	// INC/DEC reg - inline fast paths (macros don't work with hex like 4e/4f)
+#define DO_INC_FAST(reg_idx) \
+	{ \
+		PROF_TOTAL(); \
+		int cf = get_CF(cpu); \
+		if (opsz16) { \
+			cpu->cc.src1 = sext16(cpu->gprx[reg_idx].r16); \
+			cpu->cc.dst = sext16(cpu->cc.src1 + 1); \
+			cpu->gprx[reg_idx].r16 = cpu->cc.dst; \
+			cpu->cc.op = CC_INC16; \
+		} else { \
+			cpu->cc.src1 = sext32(cpu->gprx[reg_idx].r32); \
+			cpu->cc.dst = sext32(cpu->cc.src1 + 1); \
+			cpu->gprx[reg_idx].r32 = cpu->cc.dst; \
+			cpu->cc.op = CC_INC32; \
+		} \
+		cpu->cc.mask = PF | AF | ZF | SF | OF; \
+		SET_BIT(cpu->flags, cf, CF); \
+		ebreak; \
+	}
+#define DO_DEC_FAST(reg_idx) \
+	{ \
+		PROF_TOTAL(); \
+		int cf = get_CF(cpu); \
+		if (opsz16) { \
+			cpu->cc.src1 = sext16(cpu->gprx[reg_idx].r16); \
+			cpu->cc.dst = sext16(cpu->cc.src1 - 1); \
+			cpu->gprx[reg_idx].r16 = cpu->cc.dst; \
+			cpu->cc.op = CC_DEC16; \
+		} else { \
+			cpu->cc.src1 = sext32(cpu->gprx[reg_idx].r32); \
+			cpu->cc.dst = sext32(cpu->cc.src1 - 1); \
+			cpu->gprx[reg_idx].r32 = cpu->cc.dst; \
+			cpu->cc.op = CC_DEC32; \
+		} \
+		cpu->cc.mask = PF | AF | ZF | SF | OF; \
+		SET_BIT(cpu->flags, cf, CF); \
+		ebreak; \
+	}
+	f0x40_fast: DO_INC_FAST(0)  // INC EAX
+	f0x41_fast: DO_INC_FAST(1)  // INC ECX
+	f0x42_fast: DO_INC_FAST(2)  // INC EDX
+	f0x43_fast: DO_INC_FAST(3)  // INC EBX
+	f0x44_fast: DO_INC_FAST(4)  // INC ESP
+	f0x45_fast: DO_INC_FAST(5)  // INC EBP
+	f0x46_fast: DO_INC_FAST(6)  // INC ESI
+	f0x47_fast: DO_INC_FAST(7)  // INC EDI
+	f0x48_fast: DO_DEC_FAST(0)  // DEC EAX
+	f0x49_fast: DO_DEC_FAST(1)  // DEC ECX
+	f0x4a_fast: DO_DEC_FAST(2)  // DEC EDX
+	f0x4b_fast: DO_DEC_FAST(3)  // DEC EBX
+	f0x4c_fast: DO_DEC_FAST(4)  // DEC ESP
+	f0x4d_fast: DO_DEC_FAST(5)  // DEC EBP
+	f0x4e_fast: DO_DEC_FAST(6)  // DEC ESI
+	f0x4f_fast: DO_DEC_FAST(7)  // DEC EDI
+#undef DO_INC_FAST
+#undef DO_DEC_FAST
+
+	f0x85_fast: { // TEST r/m, r - optimized for reg-to-reg
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		if (likely((modrm & 0xC0) == 0xC0)) {
+			int reg = (modrm >> 3) & 7;
+			int rm = modrm & 7;
+			if (opsz16) {
+				cpu->cc.dst = sext16(cpu->gprx[rm].r16 & cpu->gprx[reg].r16);
+			} else {
+				cpu->cc.dst = sext32(cpu->gprx[rm].r32 & cpu->gprx[reg].r32);
+			}
+			cpu->cc.op = CC_AND;
+			cpu->cc.mask = CF | PF | ZF | SF | OF;
+			ebreak;
+		}
+		// Memory path
+		{
+			int reg = (modrm >> 3) & 7;
+			int mod = modrm >> 6;
+			int rm = modrm & 7;
+			TRY(modsib(cpu, adsz16, mod, rm, &addr, &curr_seg));
+			if (opsz16) {
+				TRY(translate16(cpu, &meml, 1, curr_seg, addr));
+				cpu->cc.dst = sext16(laddr16(&meml) & cpu->gprx[reg].r16);
+			} else {
+				TRY(translate32(cpu, &meml, 1, curr_seg, addr));
+				cpu->cc.dst = sext32(laddr32(&meml) & cpu->gprx[reg].r32);
+			}
+			cpu->cc.op = CC_AND;
+			cpu->cc.mask = CF | PF | ZF | SF | OF;
+		}
+		ebreak;
+	}
+
+	f0x8d_fast: { // LEA r, m - no flags, just address calculation
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		int reg = (modrm >> 3) & 7;
+		int mod = modrm >> 6;
+		int rm = modrm & 7;
+		if (mod == 3) {
+			// LEA with register operand - same as MOV
+			if (opsz16) cpu->gprx[reg].r16 = cpu->gprx[rm].r16;
+			else cpu->gprx[reg].r32 = cpu->gprx[rm].r32;
+		} else {
+			TRY(modsib(cpu, adsz16, mod, rm, &addr, &curr_seg));
+			if (opsz16) cpu->gprx[reg].r16 = addr;
+			else cpu->gprx[reg].r32 = addr;
+		}
+		ebreak;
+	}
+
+	f0x83_fast: { // Group 1 Ev, Ib - very common (add/sub/cmp with imm8)
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		int group = (modrm >> 3) & 7;
+		int mod = modrm >> 6;
+		int rm = modrm & 7;
+
+		if (likely(mod == 3)) {
+			// Register operand - most common case
+			u8 imm8;
+			TRY(fetch8(cpu, &imm8));
+			sword imm = (sword)(s8)imm8;  // Sign extend
+
+			if (opsz16) {
+				cpu->cc.src1 = sext16(cpu->gprx[rm].r16);
+				cpu->cc.src2 = imm;
+				switch (group) {
+				case 0: // ADD
+					cpu->cc.dst = sext16(cpu->cc.src1 + cpu->cc.src2);
+					cpu->gprx[rm].r16 = cpu->cc.dst;
+					cpu->cc.op = CC_ADD;
+					cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+					break;
+				case 5: // SUB
+					cpu->cc.dst = sext16(cpu->cc.src1 - cpu->cc.src2);
+					cpu->gprx[rm].r16 = cpu->cc.dst;
+					cpu->cc.op = CC_SUB;
+					cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+					break;
+				case 7: // CMP
+					cpu->cc.dst = sext16(cpu->cc.src1 - cpu->cc.src2);
+					cpu->cc.op = CC_SUB;
+					cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+					break;
+				case 1: // OR
+					cpu->cc.dst = sext16(cpu->gprx[rm].r16 | imm);
+					cpu->gprx[rm].r16 = cpu->cc.dst;
+					cpu->cc.op = CC_OR;
+					cpu->cc.mask = CF | PF | ZF | SF | OF;
+					break;
+				case 4: // AND
+					cpu->cc.dst = sext16(cpu->gprx[rm].r16 & imm);
+					cpu->gprx[rm].r16 = cpu->cc.dst;
+					cpu->cc.op = CC_AND;
+					cpu->cc.mask = CF | PF | ZF | SF | OF;
+					break;
+				case 6: // XOR
+					cpu->cc.dst = sext16(cpu->gprx[rm].r16 ^ imm);
+					cpu->gprx[rm].r16 = cpu->cc.dst;
+					cpu->cc.op = CC_XOR;
+					cpu->cc.mask = CF | PF | ZF | SF | OF;
+					break;
+				case 2: // ADC
+				case 3: // SBB
+				default:
+					goto f0x83_slow;
+				}
+			} else {
+				cpu->cc.src1 = sext32(cpu->gprx[rm].r32);
+				cpu->cc.src2 = imm;
+				switch (group) {
+				case 0: // ADD
+					cpu->cc.dst = sext32(cpu->cc.src1 + cpu->cc.src2);
+					cpu->gprx[rm].r32 = cpu->cc.dst;
+					cpu->cc.op = CC_ADD;
+					cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+					break;
+				case 5: // SUB
+					cpu->cc.dst = sext32(cpu->cc.src1 - cpu->cc.src2);
+					cpu->gprx[rm].r32 = cpu->cc.dst;
+					cpu->cc.op = CC_SUB;
+					cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+					break;
+				case 7: // CMP
+					cpu->cc.dst = sext32(cpu->cc.src1 - cpu->cc.src2);
+					cpu->cc.op = CC_SUB;
+					cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+					break;
+				case 1: // OR
+					cpu->cc.dst = sext32(cpu->gprx[rm].r32 | imm);
+					cpu->gprx[rm].r32 = cpu->cc.dst;
+					cpu->cc.op = CC_OR;
+					cpu->cc.mask = CF | PF | ZF | SF | OF;
+					break;
+				case 4: // AND
+					cpu->cc.dst = sext32(cpu->gprx[rm].r32 & imm);
+					cpu->gprx[rm].r32 = cpu->cc.dst;
+					cpu->cc.op = CC_AND;
+					cpu->cc.mask = CF | PF | ZF | SF | OF;
+					break;
+				case 6: // XOR
+					cpu->cc.dst = sext32(cpu->gprx[rm].r32 ^ imm);
+					cpu->gprx[rm].r32 = cpu->cc.dst;
+					cpu->cc.op = CC_XOR;
+					cpu->cc.mask = CF | PF | ZF | SF | OF;
+					break;
+				case 2: // ADC
+				case 3: // SBB
+				default:
+					goto f0x83_slow;
+				}
+			}
+			ebreak;
+		}
+		f0x83_slow:
+		// Fall through to standard handler for memory ops and ADC/SBB
+		cpu->next_ip = cpu->ip + 1;  // Rewind to re-fetch modrm
+		goto f0x83;
 	}
 
 #endif
