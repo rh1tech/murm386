@@ -1,7 +1,11 @@
 /**
- * Board Configuration for murm386 - 386 Emulator for RP2350
+ * murm386 - i386 PC Emulator for RP2350
  *
- * Supports M1 and M2 board variants with different GPIO layouts.
+ * Board Configuration - supports M1 and M2 board variants with
+ * different GPIO layouts for VGA, SD card, PS/2, and I2S audio.
+ *
+ * Copyright (c) 2026 Mikhail Matveev <xtreme@rh1.tech>
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef BOARD_CONFIG_H
@@ -222,9 +226,9 @@ static inline uint get_psram_pin(void) {
 
 // VGA horizontal shift (where active video starts)
 // Adjust this value to center the display on your monitor
-// Default: 138 (tuned for typical monitor centering)
+// Default: 106 (tuned for typical monitor centering)
 #ifndef VGA_SHIFT_PICTURE
-#define VGA_SHIFT_PICTURE 138
+#define VGA_SHIFT_PICTURE 106
 #endif
 
 //=============================================================================

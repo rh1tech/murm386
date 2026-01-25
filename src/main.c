@@ -1,8 +1,11 @@
 /**
- * murm386 - 386 Emulator for RP2350
+ * murm386 - i386 PC Emulator for RP2350
  *
  * Main entry point for the RP2350 platform.
  * Initializes hardware, loads configuration, and starts the emulator.
+ *
+ * Copyright (c) 2026 Mikhail Matveev <xtreme@rh1.tech>
+ * SPDX-License-Identifier: MIT
  */
 
 #include <stdio.h>
@@ -65,6 +68,111 @@ static uint8_t *framebuffer = NULL;
 
 // FatFS state
 static FATFS fatfs;
+
+// Flag to track if VGA is initialized (for error display)
+static bool vga_initialized = false;
+
+//=============================================================================
+// Error Display
+//=============================================================================
+
+/**
+ * Display a fatal error screen (red box on black background).
+ * Halts execution after displaying the message.
+ * Can only display errors if VGA is initialized.
+ */
+static void show_error_screen(const char *title, const char *message, const char *detail) {
+    if (!vga_initialized) {
+        // VGA not ready, just print to serial and halt
+        printf("FATAL ERROR: %s\n", title);
+        printf("  %s\n", message);
+        if (detail) printf("  %s\n", detail);
+        while (1) { sleep_ms(1000); }
+    }
+
+    // Initialize OSD for error display
+    osd_init();
+    osd_clear();
+
+    // Fill screen with black
+    uint8_t black_attr = OSD_ATTR(OSD_WHITE, OSD_BLACK);
+    osd_fill(0, 0, OSD_COLS, OSD_ROWS, ' ', black_attr);
+
+    // Draw red error box in center
+    int box_w = 60;
+    int box_h = 10;
+    int box_x = (OSD_COLS - box_w) / 2;
+    int box_y = (OSD_ROWS - box_h) / 2;
+
+    uint8_t error_attr = OSD_ATTR(OSD_WHITE, OSD_RED);
+    uint8_t text_attr = OSD_ATTR(OSD_YELLOW, OSD_RED);
+
+    // Fill box background
+    osd_fill(box_x, box_y, box_w, box_h, ' ', error_attr);
+
+    // Draw box border
+    osd_draw_box_titled(box_x, box_y, box_w, box_h, title, error_attr);
+
+    // Print message
+    int msg_y = box_y + 3;
+    osd_print(box_x + 3, msg_y, message, text_attr);
+
+    // Print detail if provided
+    if (detail && detail[0]) {
+        osd_print(box_x + 3, msg_y + 2, detail, error_attr);
+    }
+
+    // Print hint at bottom
+    osd_print(box_x + 3, box_y + box_h - 2, "Please check hardware and restart.", error_attr);
+
+    osd_show();
+
+    // Also print to serial
+    printf("FATAL ERROR: %s\n", title);
+    printf("  %s\n", message);
+    if (detail) printf("  %s\n", detail);
+
+    // Halt
+    while (1) {
+        sleep_ms(1000);
+    }
+}
+
+/**
+ * Display a warning screen (yellow box) but continue execution.
+ */
+static void show_warning_screen(const char *title, const char *message, int delay_ms) {
+    if (!vga_initialized) {
+        printf("WARNING: %s - %s\n", title, message);
+        return;
+    }
+
+    osd_init();
+    osd_clear();
+
+    // Fill screen with black
+    uint8_t black_attr = OSD_ATTR(OSD_WHITE, OSD_BLACK);
+    osd_fill(0, 0, OSD_COLS, OSD_ROWS, ' ', black_attr);
+
+    // Draw yellow warning box
+    int box_w = 60;
+    int box_h = 8;
+    int box_x = (OSD_COLS - box_w) / 2;
+    int box_y = (OSD_ROWS - box_h) / 2;
+
+    uint8_t warn_attr = OSD_ATTR(OSD_BLACK, OSD_YELLOW);
+
+    osd_fill(box_x, box_y, box_w, box_h, ' ', warn_attr);
+    osd_draw_box_titled(box_x, box_y, box_w, box_h, title, warn_attr);
+    osd_print(box_x + 3, box_y + 3, message, warn_attr);
+
+    osd_show();
+
+    printf("WARNING: %s - %s\n", title, message);
+    sleep_ms(delay_ms);
+
+    osd_hide();
+}
 
 //=============================================================================
 // Platform HAL Implementation
@@ -520,7 +628,7 @@ static bool init_hardware(void) {
     // Configure clocks (including overclock if enabled)
     configure_clocks();
 
-    // Initialize PSRAM
+    // Initialize PSRAM first
     DBG_PRINT("Initializing PSRAM...\n");
     uint psram_pin = get_psram_pin();
     DBG_PRINT("  PSRAM CS pin: GPIO%d\n", psram_pin);
@@ -528,20 +636,39 @@ static bool init_hardware(void) {
 
     if (!psram_test()) {
         printf("ERROR: PSRAM test failed!\n");
+        // Can't show visual error - VGA not ready yet
         return false;
     }
     DBG_PRINT("  PSRAM test passed (8MB)\n");
+
+    // Initialize VGA early so we can show errors on screen
+    DBG_PRINT("Initializing VGA...\n");
+    DBG_PRINT("  Base pin: GPIO%d\n", VGA_BASE_PIN);
+    vga_hw_init();
+    vga_initialized = true;
 
     // Initialize SD card
     DBG_PRINT("Initializing SD card...\n");
     FRESULT res = f_mount(&fatfs, "", 1);
     if (res != FR_OK) {
-        printf("ERROR: Failed to mount SD card (error %d)\n", res);
-        return false;
+        char detail[32];
+        snprintf(detail, sizeof(detail), "FatFS error code: %d", res);
+        show_error_screen(" SD Card Error ", "Failed to mount SD card.", detail);
+        // show_error_screen never returns
     }
     DBG_PRINT("  SD card mounted\n");
 
-    // Load murm386-specific hardware settings from INI before VGA init
+    // Check if 386/ directory exists
+    DIR dir;
+    res = f_opendir(&dir, "386");
+    if (res != FR_OK) {
+        show_error_screen(" Missing Directory ", "Directory '386/' not found on SD card.", "Create it and add config.ini, bios.bin");
+        // show_error_screen never returns
+    }
+    f_closedir(&dir);
+    DBG_PRINT("  386/ directory found\n");
+
+    // Load murm386-specific hardware settings from INI
     // This allows cpu_freq and psram_freq to be configured
     {
         FIL fp;
@@ -560,6 +687,9 @@ static bool init_hardware(void) {
                 free(content);
             }
             f_close(&fp);
+            DBG_PRINT("  Loaded config.ini\n");
+        } else {
+            show_warning_screen(" Warning ", "config.ini not found, using defaults.", 2000);
         }
 
         // Check if clock reconfiguration is needed
@@ -580,11 +710,6 @@ static bool init_hardware(void) {
     DBG_PRINT("Initializing USB HID keyboard...\n");
     usbkbd_init();
 #endif
-
-    // Initialize VGA
-    DBG_PRINT("Initializing VGA...\n");
-    DBG_PRINT("  Base pin: GPIO%d\n", VGA_BASE_PIN);
-    vga_hw_init();
 
     // Initialize I2S Audio
     DBG_PRINT("Initializing I2S Audio...\n");
@@ -663,8 +788,25 @@ static bool init_emulator(void) {
     // Hardware settings are loaded from [murm386] section via parse_murm386_ini
     config_clear_changes();
 
-    // Load BIOS and reset
+    // Check if BIOS file exists before loading
     DBG_PRINT("Loading BIOS...\n");
+    if (config.bios && config.bios[0]) {
+        char bios_path[256];
+        FIL fp;
+        snprintf(bios_path, sizeof(bios_path), "386/%s", config.bios);
+        if (f_open(&fp, bios_path, FA_READ) != FR_OK) {
+            char detail[64];
+            snprintf(detail, sizeof(detail), "File: %s", bios_path);
+            show_error_screen(" Missing BIOS ", "BIOS file not found.", detail);
+            // show_error_screen never returns
+        }
+        f_close(&fp);
+    } else {
+        show_error_screen(" Missing BIOS ", "No BIOS file specified in config.", "Add bios=filename to config.ini");
+        // show_error_screen never returns
+    }
+
+    // Load BIOS and reset CPU
     load_bios_and_reset(pc);
 
     return true;

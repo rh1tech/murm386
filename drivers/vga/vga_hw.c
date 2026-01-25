@@ -1,7 +1,11 @@
 /**
- * VGA Driver for RP2350 - Based on pico-286's vga-nextgen
- * 
- * Reads directly from tiny386's VRAM and renders text/graphics on-the-fly.
+ * murm386 - i386 PC Emulator for RP2350
+ *
+ * VGA Driver - based on pico-286's vga-nextgen by xrip.
+ * Reads directly from emulator VRAM and renders text/graphics on-the-fly.
+ *
+ * Copyright (c) 2026 Mikhail Matveev <xtreme@rh1.tech>
+ * SPDX-License-Identifier: MIT
  */
 
 #pragma GCC optimize("Ofast")

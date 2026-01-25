@@ -1,131 +1,349 @@
-# Tiny386
+# murm386
 
-## Introduction
-Tiny386 is an x86 PC emulator written in C99. The highlight of the project is its portability. It now boots Windows 9x/NT on MCU such as ESP32-S3.
+i386 PC Emulator for RP2350 (Raspberry Pi Pico 2) with VGA output, SD card storage, PS/2 and USB keyboard, and audio output.
 
-The core of the project is a built-from-scratch, simple and stupid i386 cpu emulator. Some features are missing, e.g. debugging, hardware tasking and some permission checks, but it should be able to run most 16/32 bit software. To boot modern linux kernel and windows, some 486 and 586 instrutions are added. The cpu emulator is kept in ~6K LOC. There is also an optional x87 fpu emulator.
+Based on [Tiny386](https://github.com/hchunhui/tiny386) by Chunhui He.
 
-To assemble a complete PC system, we have ported many peripherals from TinyEMU and QEMU, it now includes:
- - 8259 PIC
- - 8254 PIT
- - 8042 Keyboard Controller
- - CMOS RTC
- - ISA VGA with Bochs VBE
- - IDE Disk Controller
- - NE2000 ISA Network Card
- - 8257 ISA DMA
- - PC Speaker
- - Adlib OPL2
- - SoundBlaster 16
+## Features
 
-For firmware, the BIOS/VGABIOS comes from seabios. Tiny386 also supports booting linux kernel directly, without traditional BIOS. The idea comes from JSLinux, and it uses a small stub code called linuxstart.
+- Full i386/i486/i586 CPU emulation with optional x87 FPU
+- Up to 7MB RAM (using 8MB PSRAM)
+- VGA graphics output (text modes and graphics up to 640x480)
+- Sound: AdLib OPL2, Sound Blaster 16, PC Speaker
+- SD card support for floppy, hard disk, and CD-ROM images
+- Runtime disk manager (Win+F12) for hot-swapping disk images
+- Settings menu (Win+F11) for changing emulator configuration
+- PS/2 keyboard input
+- USB keyboard and mouse input (via native USB Host)
+- Boots DOS, Windows 3.x/95/98/NT/2000/XP, Linux, and more
 
-## Demo
-See [here](https://hchunhui.github.io/tiny386)
+## Supported Boards
 
-## Build
-Linux (with rawdraw): You need to install `libslirp` `libx11` and `libasound2` first, then type `make`.
+This firmware is designed for RP2350-based boards with integrated VGA, SD card, and keyboard input:
 
-Linux (with SDL): You need to install `libslirp` `SDL1.2` (or `sdl12-compat`) first, then type `make USE_SDL=y`.
+- **[Murmulator](https://murmulator.ru)** - A compact retro-computing platform based on RP Pico 2
+- **[FRANK](https://rh1.tech/projects/frank?area=about)** - A versatile development board with VGA output
 
-For other platforms, please refer to `.github/workflows/build.yml`.
+Both boards provide all necessary peripherals out of the box.
 
-Pre-built binaries: [here](https://github.com/hchunhui/tiny386/releases)
+## Hardware Requirements
 
-## Usage
+- **Raspberry Pi Pico 2** (RP2350) or compatible board
+- **8MB PSRAM** (required for extended memory)
+- **VGA connector** (accent resistor DAC)
+- **SD card module** (SPI mode)
+- **PS/2 keyboard** (directly connected) - OR - **USB keyboard** (via native USB port)
+- **Audio output** (optional):
+  - **I2S DAC module** (e.g., TDA1387 or PCM5102) - recommended for best quality
 
-- Prepare an ini file
+> **Note:** When USB HID is enabled, the native USB port is used for keyboard/mouse input. USB serial console (CDC) is disabled in this mode; use UART for debug output.
+
+## Board Configurations
+
+Two GPIO layouts are supported: **M1** and **M2**.
+
+### VGA (accent resistor DAC)
+| Signal | M1 GPIO | M2 GPIO |
+|--------|---------|---------|
+| HSYNC  | 6       | 12      |
+| VSYNC  | 7       | 13      |
+| R0     | 8       | 14      |
+| R1     | 9       | 15      |
+| G0     | 10      | 16      |
+| G1     | 11      | 17      |
+| B0     | 12      | 18      |
+| B1     | 13      | 19      |
+
+### SD Card (SPI mode)
+| Signal  | M1 GPIO | M2 GPIO |
+|---------|---------|---------|
+| CLK     | 2       | 6       |
+| CMD     | 3       | 7       |
+| DAT0    | 4       | 4       |
+| DAT3/CS | 5       | 5       |
+
+### PS/2 Keyboard
+| Signal | M1 GPIO | M2 GPIO |
+|--------|---------|---------|
+| CLK    | 0       | 2       |
+| DATA   | 1       | 3       |
+
+### I2S Audio
+| Signal | M1 GPIO | M2 GPIO |
+|--------|---------|---------|
+| DATA   | 26      | 9       |
+| BCLK   | 27      | 10      |
+| LRCLK  | 28      | 11      |
+
+## SD Card Setup
+
+### Directory Structure
+
+Create a `386/` directory on your SD card:
+
+```
+SD Card Root/
+└── 386/
+    ├── config.ini      # Configuration file
+    ├── bios.bin        # SeaBIOS ROM (required)
+    ├── vgabios.bin     # VGA BIOS ROM (required)
+    ├── dos622.img      # Hard disk image
+    ├── boot.img        # Floppy image
+    └── ...             # Other disk images
+```
+
+### BIOS Files
+
+Download SeaBIOS and VGA BIOS from the [SeaBIOS releases](https://www.seabios.org/downloads/) or use pre-built binaries from [Tiny386 releases](https://github.com/hchunhui/tiny386/releases).
+
+### Configuration File (config.ini)
+
+Create `386/config.ini`:
+
 ```ini
 [pc]
-; set path to BIOS and VGA BIOS
+; Path to BIOS files (relative to 386/ directory)
 bios = bios.bin
 vga_bios = vgabios.bin
 
-; set memory size and VGA memory size
-mem_size = 32M
-vga_mem_size = 2M
+; Memory configuration
+mem_size = 4M           ; Main RAM: 1M, 2M, 4M, 7M
+vga_mem_size = 128K     ; VGA memory: 128K, 256K, 512K
 
-; fda/fdb for floppy disks (optional)
-fda = floppy.img
+; CPU generation: 3=386, 4=486, 5=586/Pentium
+gen = 4
 
-; hda/hdb/hdc/hdd for hard disks (optional)
-; cda/cdb/cdc/cdd for CD-ROM disks (optional)
-hda = win95.img
-cdb = win95_cd.iso
+; FPU emulation: 0=disabled, 1=enabled
+fpu = 0
 
-; "fill_cmos" fixes "MS-DOS compatibility mode" in win9x, but it breaks winNT...
+; Floppy drives (optional)
+fda = boot.img
+; fdb = disk2.img
+
+; Hard drives (optional)
+hda = dos622.img
+; hdb = data.img
+
+; CD-ROM drives (optional)
+; cda = cdrom.iso
+
+; CMOS settings (set to 1 for Windows 9x, 0 for Windows NT)
 fill_cmos = 1
 
-[display]
-width = 720
-height = 480
+[hardware]
+; Sound devices: 0=disabled, 1=enabled
+pcspeaker = 1
+adlib = 1
+soundblaster = 1
 
-[cpu]
-; gen = 3/4/5, for 386/486/586
-gen = 3
-; fpu = 0/1, to disable/enable x87
-fpu = 0
-```
-- Run
-```sh
-./tiny386 config.ini
-```
+; Mouse support: 0=disabled, 1=enabled
+mouse = 1
 
-For rawdraw and SDL port:
-Press "Ctrl + ]" to grab/ungrab the keyboard and mouse. Press "Ctrl + [" to show/hide OSD (On Screen Display). In OSD mode, the floppy/CD-ROM disk can be changed on the fly.
-
-## ESP32 port
-Currently the only supported target is the JC3248W535 dev board. The supported ESP-IDF version is v5.2.x.
-
-### Build and Flash
-You can find the pre-built flash image `esp/flash_image_JC3248W535.bin` from [here](https://github.com/hchunhui/tiny386/releases).
-The pre-built image can be flashed directly to offset 0.
-
-Online flasher for esp chips: https://espressif.github.io/esptool-js
-
-To build and flash manually:
-```sh
-scripts/build.sh patch_idf  # apply patches to ESP-IDF
-make prepare
-cd esp
-idf.py build
-idf.py flash
+; Overclock settings (MHz)
+cpu_freq = 378
+psram_freq = 133
 ```
 
-### Configure
-All files should be put in a SD card with FAT/exFAT file system. The ini file should be `tiny386.ini` and put in the root directory.
-Please refer to `esp/tiny386.ini`.
+### Preparing Disk Images
 
-Alternative usage: `bios.bin` `vgabios.bin` `vmlinux.bin` and `linuxstart.bin` can be put in corresponding flash partition. Other files can be put in the `storage` flash partition. Please refer to `esp/partition.csv`.
+**Floppy Images (.img):**
+- Standard 1.44MB floppy images (1474560 bytes)
+- Create with: `dd if=/dev/zero of=floppy.img bs=512 count=2880`
+- Format with DOS or use pre-made DOS boot disks
 
-### Keyboard/Mouse Input
+**Hard Disk Images (.img):**
+- Raw disk images up to 2GB
+- Create with: `dd if=/dev/zero of=hdd.img bs=1M count=512`
+- Use FDISK and FORMAT from DOS to partition and format
 
-- Forward over WIFI
+**CD-ROM Images (.iso):**
+- Standard ISO 9660 images
+- Use CD burning software to create ISOs from CDs
 
-`wifikbd` is used to forward keyboard/mouse events to the dev board over WIFI:
+### Loading Disk Images
+
+**At Boot:**
+Configure disk images in `config.ini` as shown above.
+
+**At Runtime (Disk Manager):**
+1. Press **Win+F12** to open the Disk Manager
+2. Use arrow keys to select a drive (A:, B:, C:, D:, E:)
+3. Press **Enter** to browse disk images in the `386/` directory
+4. Select an image file to insert, or eject the current disk
+5. Press **Escape** to close the Disk Manager
+
+Changes made via Disk Manager are saved to `config.ini` automatically.
+
+## Controls
+
+### Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| Win+F12  | Open Disk Manager |
+| Win+F11  | Open Settings Menu |
+| Ctrl+Alt+Delete | System reset (sent to guest OS) |
+
+### Settings Menu (Win+F11)
+
+Configure emulator settings at runtime:
+- Memory size (1-7 MB)
+- CPU generation (386/486/586)
+- FPU emulation on/off
+- Sound devices on/off
+- Mouse support on/off
+- RP2350 CPU frequency (378/504 MHz)
+- PSRAM frequency (133/166 MHz)
+
+Settings are saved to `config.ini` and take effect after restart.
+
+### Disk Manager (Win+F12)
+
+Manage disk images without restarting:
+- Insert/eject floppy images (A:, B:)
+- Insert/eject hard disk images (C:, D:)
+- Insert/eject CD-ROM images (E:)
+
+## Building
+
+### Prerequisites
+
+1. Install the [Raspberry Pi Pico SDK](https://github.com/raspberrypi/pico-sdk) (version 2.0+)
+2. Set environment variable: `export PICO_SDK_PATH=/path/to/pico-sdk`
+3. Install ARM GCC toolchain
+
+### Build Steps
+
+```bash
+# Clone the repository
+git clone https://github.com/user/murm386.git
+cd murm386
+
+# Build with default settings (M1 board, 378MHz, PS/2 keyboard)
+./build.sh
+
+# Build for M2 board
+./build.sh -M2
+
+# Build with USB keyboard support
+./build.sh --usb-hid
+
+# Build for Murmulator OS
+./build.sh --mos2
+
+# Custom build
+./build.sh -b M1 -c 504 -p 166 --debug
 ```
-(ESP32-S3 board: listen on TCP port 9999) <--- WIFI ---> AP <--- WIFI/Wire ---> (PC: ./wifikbd esp_board_addr 9999)
+
+### Build Options (build.sh)
+
+| Option | Description |
+|--------|-------------|
+| `-b, --board <M1\|M2>` | Board variant (default: M1) |
+| `-c, --cpu <MHz>` | CPU speed: 378 (default), 504 |
+| `-p, --psram <MHz>` | PSRAM speed: 133 (default), 166 |
+| `--usb-hid` | Enable USB keyboard (disables USB serial) |
+| `--debug` | Enable debug output |
+| `--mos2` | Build for Murmulator OS (m1p2/m2p2 format) |
+| `-clean` | Clean build directory first |
+
+### Build Options (CMake)
+
+| Option | Description |
+|--------|-------------|
+| `-DPICO_BOARD=pico2` | Build for RP2350 (default) |
+| `-DBOARD=M1` | Use M1 GPIO layout (default) |
+| `-DBOARD=M2` | Use M2 GPIO layout |
+| `-DCPU_SPEED=378` | CPU clock in MHz (378, 504) |
+| `-DPSRAM_SPEED=133` | PSRAM clock in MHz (133, 166) |
+| `-DUSB_HID_ENABLED=ON` | Enable USB keyboard (disables USB serial) |
+| `-DDEBUG_ENABLED=ON` | Enable verbose debug logging |
+| `-DMOS2=ON` | Build for Murmulator OS |
+
+### Release Builds
+
+To build all firmware variants:
+
+```bash
+./release.sh
 ```
 
-- USB hid (WIP)
+This creates firmware files in the `release/` directory:
+- `murm386_m1_*.uf2` - M1 board, standard UF2 format
+- `murm386_m2_*.uf2` - M2 board, standard UF2 format
+- `murm386_m1_*.m1p2` - M1 board, Murmulator OS format
+- `murm386_m2_*.m2p2` - M2 board, Murmulator OS format
 
-See [here](https://github.com/hchunhui/tiny386/pull/4).
+### Flashing
+
+```bash
+# With device in BOOTSEL mode:
+picotool load build/murm386.uf2
+
+# Or use the flash script:
+./flash.sh
+```
 
 ## Troubleshooting
 
 ### "0 bytes of memory" during Windows 95 setup
-Use "setup /im" to bypass memory check.
+Use `setup /im` to bypass memory check.
 
-### "protection error" during Windows 95 startup
+### "Protection error" during Windows 95 startup
 Use [patcher9x](https://github.com/JHRobotics/patcher9x).
 
-### NE2000 doesn't work
-Manually set the IRQ to 9(or 2).
+### Freeze during Windows NT4/2000/XP startup
+Set `fill_cmos = 0` in config.ini.
 
-### freeze during Windows NT4/2000/XP startup
-Use `fill_cmos = 0` in the config ini file.
+### No keyboard input
+- For PS/2: Check keyboard connection and GPIO pins
+- For USB: Ensure firmware was built with `--usb-hid` option
+
+### SD card not detected
+- Ensure SD card is formatted as FAT32
+- Check SD card module connections
+- Verify `386/` directory exists on SD card
 
 ## License
-The cpu emulator and the project as a whole are both licensed under the BSD-3-Clause license.
 
-SeaBIOS is distributed under the GNU LGPL-3 license.
+MIT License. See [LICENSE](LICENSE) for details.
+
+## Acknowledgments
+
+This project is based on the following open-source projects:
+
+### Tiny386
+- **Project:** [Tiny386 - x86 PC Emulator](https://github.com/hchunhui/tiny386)
+- **Author:** Chunhui He
+- **License:** BSD 3-Clause
+- **Description:** The core i386 CPU emulator and PC peripheral emulation (8259 PIC, 8254 PIT, 8042 keyboard controller, VGA, sound devices).
+
+### Pico-286
+- **Project:** [Pico-286](https://github.com/xrip/pico-286)
+- **Author:** xrip
+- **License:** MIT
+- **Description:** RP2350 platform integration, disk management, VGA driver concepts.
+
+### QuakeGeneric
+- **Project:** [QuakeGeneric](https://github.com/DnCraptor/quakegeneric)
+- **Author:** DnCraptor
+- **License:** GPL v2
+- **Description:** RP2350 hardware integration patterns and Murmulator platform support.
+
+### SeaBIOS
+- **Project:** [SeaBIOS](https://www.seabios.org/)
+- **Authors:** Kevin O'Connor and contributors
+- **License:** GNU LGPL v3
+- **Description:** x86 BIOS and VGA BIOS firmware.
+
+### FatFs
+- **Project:** [FatFs](http://elm-chan.org/fsw/ff/)
+- **Author:** ChaN
+- **License:** FatFs License (BSD-style)
+- **Description:** Generic FAT filesystem module for SD card access.
+
+## Authors & Contributors
+
+**Mikhail Matveev** <<xtreme@rh1.tech>>
+- murm386 port and development (2026)
+- Website: [https://rh1.tech](https://rh1.tech)

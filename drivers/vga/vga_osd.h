@@ -1,8 +1,10 @@
 /**
- * VGA OSD (On-Screen Display) Overlay for murm386
+ * murm386 - i386 PC Emulator for RP2350
  *
- * Simple text-based overlay that renders on top of the main VGA output.
- * Used for the disk manager UI and other system menus.
+ * VGA OSD (On-Screen Display) - text overlay for disk manager and settings UI.
+ *
+ * Copyright (c) 2026 Mikhail Matveev <xtreme@rh1.tech>
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef VGA_OSD_H

@@ -1,10 +1,11 @@
 /**
- * Stub implementations for disabled features on RP2350
+ * murm386 - i386 PC Emulator for RP2350
  *
- * These functions provide no-op implementations for features that are
- * disabled in the RP2350 port (network, FPU).
+ * Stub implementations for disabled features (network, FPU).
+ * Sound is enabled with I2S output.
  *
- * Note: Sound is now enabled with I2S output - sound stubs have been removed.
+ * Copyright (c) 2026 Mikhail Matveev <xtreme@rh1.tech>
+ * SPDX-License-Identifier: MIT
  */
 
 #include <stdint.h>

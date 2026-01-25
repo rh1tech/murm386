@@ -1,20 +1,15 @@
 /**
- * VGA Driver for RP2350 - pico-286 style
+ * murm386 - i386 PC Emulator for RP2350
  *
+ * VGA Driver - based on pico-286's vga-nextgen by xrip.
  * Reads directly from emulator VRAM and renders text/graphics on-the-fly.
- * No intermediate framebuffer - renders at 640x400 for proper text mode.
  *
  * GPIO Pinout (directly connected to VGA via resistor DAC):
- *   Base+0 = Blue low bit
- *   Base+1 = Blue high bit
- *   Base+2 = Green low bit
- *   Base+3 = Green high bit
- *   Base+4 = Red low bit
- *   Base+5 = Red high bit
- *   Base+6 = H-Sync (directly from bit 6)
- *   Base+7 = V-Sync (directly from bit 7)
+ *   Base+0..5 = RGB (2 bits per color)
+ *   Base+6 = H-Sync, Base+7 = V-Sync
  *
- * Pin configuration is set via board_config.h (M1 or M2 layout)
+ * Copyright (c) 2026 Mikhail Matveev <xtreme@rh1.tech>
+ * SPDX-License-Identifier: MIT
  */
 
 #pragma once
