@@ -6,7 +6,7 @@ Based on [Tiny386](https://github.com/hchunhui/tiny386) by Chunhui He.
 
 ## Features
 
-- Full i386/i486/i586 CPU emulation with optional x87 FPU
+- Full i386 (and partially i486/i586) CPU emulation with optional x87 FPU
 - Up to 7MB RAM (using 8MB PSRAM)
 - VGA graphics output (text modes and graphics up to 640x480)
 - Sound: AdLib OPL2, Sound Blaster 16, PC Speaker
@@ -15,7 +15,7 @@ Based on [Tiny386](https://github.com/hchunhui/tiny386) by Chunhui He.
 - Settings menu (Win+F11) for changing emulator configuration
 - PS/2 keyboard input
 - USB keyboard and mouse input (via native USB Host)
-- Boots DOS, Windows 3.x/95/98/NT/2000/XP, Linux, and more
+- Boots DOS, Windows 3.x/95, Linux, and more
 
 ## Supported Boards
 
@@ -94,7 +94,7 @@ SD Card Root/
 
 ### BIOS Files
 
-Download SeaBIOS and VGA BIOS from the [SeaBIOS releases](https://www.seabios.org/downloads/) or use pre-built binaries from [Tiny386 releases](https://github.com/hchunhui/tiny386/releases).
+Download SeaBIOS and VGA BIOS from the [SeaBIOS releases](https://www.seabios.org/downloads/) or use bios.bin/vgabios.bin from `sdcard/386`.
 
 ### Configuration File (config.ini)
 
@@ -102,46 +102,14 @@ Create `386/config.ini`:
 
 ```ini
 [pc]
-; Path to BIOS files (relative to 386/ directory)
-bios = bios.bin
-vga_bios = vgabios.bin
+mem=2M
+vga_mem=128K
+bios=bios.bin
+vga_bios=vgabios.bin
 
-; Memory configuration
-mem_size = 4M           ; Main RAM: 1M, 2M, 4M, 7M
-vga_mem_size = 128K     ; VGA memory: 128K, 256K, 512K
-
-; CPU generation: 3=386, 4=486, 5=586/Pentium
-gen = 4
-
-; FPU emulation: 0=disabled, 1=enabled
-fpu = 0
-
-; Floppy drives (optional)
-fda = boot.img
-; fdb = disk2.img
-
-; Hard drives (optional)
-hda = dos622.img
-; hdb = data.img
-
-; CD-ROM drives (optional)
-; cda = cdrom.iso
-
-; CMOS settings (set to 1 for Windows 9x, 0 for Windows NT)
-fill_cmos = 1
-
-[hardware]
-; Sound devices: 0=disabled, 1=enabled
-pcspeaker = 1
-adlib = 1
-soundblaster = 1
-
-; Mouse support: 0=disabled, 1=enabled
-mouse = 1
-
-; Overclock settings (MHz)
-cpu_freq = 378
-psram_freq = 133
+[murm386]
+cpu_freq=504
+psram_freq=166
 ```
 
 ### Preparing Disk Images
@@ -271,8 +239,8 @@ To build all firmware variants:
 This creates firmware files in the `release/` directory:
 - `murm386_m1_*.uf2` - M1 board, standard UF2 format
 - `murm386_m2_*.uf2` - M2 board, standard UF2 format
-- `murm386_m1_*.m1p2` - M1 board, Murmulator OS format
-- `murm386_m2_*.m2p2` - M2 board, Murmulator OS format
+- `murm386_m1_*.m1p2` - M1 board, Murmulator OS 2 format
+- `murm386_m2_*.m2p2` - M2 board, Murmulator OS 2 format
 
 ### Flashing
 
@@ -308,6 +276,12 @@ Set `fill_cmos = 0` in config.ini.
 
 MIT License. See [LICENSE](LICENSE) for details.
 
+## Authors & Contributors
+
+**Mikhail Matveev** <<xtreme@rh1.tech>>
+- murm386 port and development (2026)
+- Website: [https://rh1.tech](https://rh1.tech)
+
 ## Acknowledgments
 
 This project is based on the following open-source projects:
@@ -341,9 +315,3 @@ This project is based on the following open-source projects:
 - **Author:** ChaN
 - **License:** FatFs License (BSD-style)
 - **Description:** Generic FAT filesystem module for SD card access.
-
-## Authors & Contributors
-
-**Mikhail Matveev** <<xtreme@rh1.tech>>
-- murm386 port and development (2026)
-- Website: [https://rh1.tech](https://rh1.tech)
