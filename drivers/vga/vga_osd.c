@@ -9,6 +9,7 @@
 
 #include "vga_osd.h"
 #include "font8x16.h"
+#include "board_config.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -166,8 +167,8 @@ void __time_critical_func(osd_render_line)(uint32_t line, uint32_t *output_buffe
     // Get pointer to this row in OSD buffer (reuses text_buffer_sram)
     uint8_t *row_data = &osd_buffer[char_row * OSD_COLS * 2];
 
-    // Output starts at SHIFT_PICTURE offset (138 pixels)
-    uint8_t *out = (uint8_t *)output_buffer + 138;
+    // Output starts at SHIFT_PICTURE offset (VGA_SHIFT_PICTURE pixels)
+    uint8_t *out = (uint8_t *)output_buffer + VGA_SHIFT_PICTURE;
 
     // Render each character
     // Bit order matches render_text_line: bits 1,0 are leftmost pair, etc.
