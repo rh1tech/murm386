@@ -850,25 +850,66 @@ static void core1_entry(void) {
 // Welcome Screen
 //=============================================================================
 
+// Fast integer sine approximation for plasma effect (returns -127 to 127)
+static int8_t fast_sin(int angle) {
+    // Simple lookup table for quarter wave, interpolate the rest
+    static const int8_t sin_table[65] = {
+        0, 3, 6, 9, 12, 16, 19, 22, 25, 28, 31, 34, 37, 40, 43, 46,
+        49, 51, 54, 57, 60, 62, 65, 67, 70, 72, 75, 77, 79, 81, 83, 85,
+        87, 89, 91, 93, 94, 96, 97, 99, 100, 101, 103, 104, 105, 106, 107, 108,
+        108, 109, 110, 110, 111, 111, 112, 112, 112, 112, 113, 113, 113, 113, 113, 113, 113
+    };
+    angle = angle & 255;  // Wrap to 0-255
+    int quadrant = angle >> 6;
+    int idx = angle & 63;
+
+    switch (quadrant) {
+        case 0: return sin_table[idx];
+        case 1: return sin_table[64 - idx];
+        case 2: return -sin_table[idx];
+        default: return -sin_table[64 - idx];
+    }
+}
+
+// Draw plasma background effect (greyscale, skipping window area)
+static void draw_plasma_background(int time, int wx, int wy, int ww, int wh) {
+    // Greyscale shading characters and colors for smooth gradients
+    // Characters: space, light shade, medium shade, dark shade, full block
+    static const char shade_chars[] = {' ', '\xB0', '\xB1', '\xB2', '\xDB'};
+
+    for (int y = 0; y < OSD_ROWS; y++) {
+        for (int x = 0; x < OSD_COLS; x++) {
+            // Skip the window area to prevent flicker
+            if (x >= wx && x < wx + ww && y >= wy && y < wy + wh) {
+                continue;
+            }
+
+            // Classic plasma formula with multiple sine waves
+            int v1 = fast_sin(x * 8 + time);
+            int v2 = fast_sin(y * 14 + time * 2);
+            int v3 = fast_sin((x + y) * 5 + time);
+            int v4 = fast_sin((x - y) * 7 - time * 2);
+
+            // Combine and normalize to 0-4 range for shade index
+            int value = (v1 + v2 + v3 + v4 + 512) >> 8;  // 0-3 range approx
+            if (value > 4) value = 4;
+            if (value < 0) value = 0;
+
+            // Use dark grey foreground on black background for dark aesthetic
+            char ch = shade_chars[value];
+            osd_putchar(x, y, ch, OSD_ATTR(OSD_DARKGRAY, OSD_BLACK));
+        }
+    }
+}
+
 static void show_welcome_screen(void) {
     // Welcome screen dimensions
     int wx = 15, wy = 7, ww = 50, wh = 11;
 
     osd_clear();
 
-    // Fill entire screen with black background
-    osd_fill(0, 0, OSD_COLS, OSD_ROWS, ' ', OSD_ATTR(OSD_WHITE, OSD_BLACK));
-
-    // Draw shadow
-    uint8_t shadow_attr = OSD_ATTR(OSD_DARKGRAY, OSD_BLACK);
-    osd_fill(wx + 2, wy + wh, ww, 1, '\xDB', shadow_attr);
-    for (int i = 1; i < wh + 1; i++) {
-        osd_putchar(wx + ww, wy + i, '\xDB', shadow_attr);
-        osd_putchar(wx + ww + 1, wy + i, '\xDB', shadow_attr);
-    }
-
-    // Draw box with cyan border
-    osd_draw_box_titled(wx, wy, ww, wh, " Welcome ", OSD_ATTR_BORDER);
+    // Draw the window content once (static, won't flicker)
+    osd_draw_box(wx, wy, ww, wh, OSD_ATTR_BORDER);
     osd_fill(wx + 1, wy + 1, ww - 2, wh - 2, ' ', OSD_ATTR_NORMAL);
 
     // Title
@@ -900,8 +941,12 @@ static void show_welcome_screen(void) {
 
     osd_show();
 
-    // Display for 7 seconds
-    sleep_ms(7000);
+    // Animate plasma background for 7 seconds (700 frames at ~10ms each)
+    // Window area is skipped by draw_plasma_background, so it won't flicker
+    for (int frame = 0; frame < 700; frame++) {
+        draw_plasma_background(frame * 3, wx, wy, ww, wh);
+        sleep_ms(10);
+    }
 
     osd_hide();
 }
