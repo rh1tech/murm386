@@ -3873,37 +3873,37 @@ static bool IRAM_ATTR_CPU_EXEC1 cpu_exec1(CPUI386 *cpu, int stepcount)
 	}
 #else
 	static const DRAM_ATTR void *pfxlabel[] = {
-/* 0x00 */	&&f0x00, &&f0x01_fast, &&f0x02, &&f0x03_fast, &&f0x04, &&f0x05, &&f0x06, &&f0x07,
-/* 0x08 */	&&f0x08, &&f0x09_fast, &&f0x0a, &&f0x0b_fast, &&f0x0c, &&f0x0d, &&f0x0e, &&f0x0f,
+/* 0x00 */	&&f0x00_fast, &&f0x01_fast, &&f0x02_fast, &&f0x03_fast, &&f0x04_fast, &&f0x05_fast, &&f0x06, &&f0x07,
+/* 0x08 */	&&f0x08_fast, &&f0x09_fast, &&f0x0a_fast, &&f0x0b_fast, &&f0x0c_fast, &&f0x0d_fast, &&f0x0e, &&f0x0f,
 /* 0x10 */	&&f0x10, &&f0x11, &&f0x12, &&f0x13, &&f0x14, &&f0x15, &&f0x16, &&f0x17,
 /* 0x18 */	&&f0x18, &&f0x19, &&f0x1a, &&f0x1b, &&f0x1c, &&f0x1d, &&f0x1e, &&f0x1f,
-/* 0x20 */	&&f0x20, &&f0x21_fast, &&f0x22, &&f0x23_fast, &&f0x24, &&f0x25, &&pfx26, &&f0x27,
-/* 0x28 */	&&f0x28, &&f0x29_fast, &&f0x2a, &&f0x2b_fast, &&f0x2c, &&f0x2d, &&pfx2e, &&f0x2f,
-/* 0x30 */	&&f0x30, &&f0x31_fast, &&f0x32, &&f0x33_fast, &&f0x34, &&f0x35, &&pfx36, &&f0x37,
-/* 0x38 */	&&f0x38, &&f0x39_fast, &&f0x3a, &&f0x3b_fast, &&f0x3c, &&f0x3d, &&pfx3e, &&f0x3f,
+/* 0x20 */	&&f0x20_fast, &&f0x21_fast, &&f0x22_fast, &&f0x23_fast, &&f0x24_fast, &&f0x25_fast, &&pfx26, &&f0x27,
+/* 0x28 */	&&f0x28_fast, &&f0x29_fast, &&f0x2a_fast, &&f0x2b_fast, &&f0x2c_fast, &&f0x2d_fast, &&pfx2e, &&f0x2f,
+/* 0x30 */	&&f0x30_fast, &&f0x31_fast, &&f0x32_fast, &&f0x33_fast, &&f0x34_fast, &&f0x35_fast, &&pfx36, &&f0x37,
+/* 0x38 */	&&f0x38_fast, &&f0x39_fast, &&f0x3a_fast, &&f0x3b_fast, &&f0x3c_fast, &&f0x3d_fast, &&pfx3e, &&f0x3f,
 /* 0x40 */	&&f0x40_fast, &&f0x41_fast, &&f0x42_fast, &&f0x43_fast, &&f0x44_fast, &&f0x45_fast, &&f0x46_fast, &&f0x47_fast,
 /* 0x48 */	&&f0x48_fast, &&f0x49_fast, &&f0x4a_fast, &&f0x4b_fast, &&f0x4c_fast, &&f0x4d_fast, &&f0x4e_fast, &&f0x4f_fast,
 /* 0x50 */	&&f0x50_fast, &&f0x51_fast, &&f0x52_fast, &&f0x53_fast, &&f0x54_fast, &&f0x55_fast, &&f0x56_fast, &&f0x57_fast,
 /* 0x58 */	&&f0x58_fast, &&f0x59_fast, &&f0x5a_fast, &&f0x5b_fast, &&f0x5c_fast, &&f0x5d_fast, &&f0x5e_fast, &&f0x5f_fast,
 /* 0x60 */	&&f0x60, &&f0x61, &&f0x62, &&f0x63, &&pfx64, &&pfx65, &&pfx66, &&pfx67,
-/* 0x68 */	&&f0x68, &&f0x69, &&f0x6a, &&f0x6b, &&f0x6c, &&f0x6d, &&f0x6e, &&f0x6f,
-/* 0x70 */	&&f0x70, &&f0x71, &&f0x72_fast, &&f0x73_fast, &&f0x74_fast, &&f0x75_fast, &&f0x76_fast, &&f0x77_fast,
-/* 0x78 */	&&f0x78, &&f0x79, &&f0x7a, &&f0x7b, &&f0x7c_fast, &&f0x7d_fast, &&f0x7e_fast, &&f0x7f_fast,
-/* 0x80 */	&&f0x80, &&f0x81, &&f0x82, &&f0x83, &&f0x84, &&f0x85_fast, &&f0x86, &&f0x87,
-/* 0x88 */	&&f0x88, &&f0x89_fast, &&f0x8a, &&f0x8b_fast, &&f0x8c, &&f0x8d_fast, &&f0x8e, &&f0x8f,
-/* 0x90 */	&&f0x90_fast, &&f0x91, &&f0x92, &&f0x93, &&f0x94, &&f0x95, &&f0x96, &&f0x97,
-/* 0x98 */	&&f0x98, &&f0x99, &&f0x9a, &&f0x9b, &&f0x9c, &&f0x9d, &&f0x9e, &&f0x9f,
+/* 0x68 */	&&f0x68_fast, &&f0x69, &&f0x6a_fast, &&f0x6b, &&f0x6c, &&f0x6d, &&f0x6e, &&f0x6f,
+/* 0x70 */	&&f0x70_fast, &&f0x71_fast, &&f0x72_fast, &&f0x73_fast, &&f0x74_fast, &&f0x75_fast, &&f0x76_fast, &&f0x77_fast,
+/* 0x78 */	&&f0x78_fast, &&f0x79_fast, &&f0x7a_fast, &&f0x7b_fast, &&f0x7c_fast, &&f0x7d_fast, &&f0x7e_fast, &&f0x7f_fast,
+/* 0x80 */	&&f0x80, &&f0x81, &&f0x82, &&f0x83, &&f0x84_fast, &&f0x85_fast, &&f0x86, &&f0x87,
+/* 0x88 */	&&f0x88_fast, &&f0x89_fast, &&f0x8a_fast, &&f0x8b_fast, &&f0x8c, &&f0x8d_fast, &&f0x8e, &&f0x8f,
+/* 0x90 */	&&f0x90_fast, &&f0x91_fast, &&f0x92_fast, &&f0x93_fast, &&f0x94_fast, &&f0x95_fast, &&f0x96_fast, &&f0x97_fast,
+/* 0x98 */	&&f0x98_fast, &&f0x99_fast, &&f0x9a, &&f0x9b, &&f0x9c, &&f0x9d, &&f0x9e, &&f0x9f,
 /* 0xa0 */	&&f0xa0, &&f0xa1, &&f0xa2, &&f0xa3, &&f0xa4, &&f0xa5, &&f0xa6, &&f0xa7,
-/* 0xa8 */	&&f0xa8, &&f0xa9, &&f0xaa, &&f0xab, &&f0xac, &&f0xad, &&f0xae, &&f0xaf,
-/* 0xb0 */	&&f0xb0, &&f0xb1, &&f0xb2, &&f0xb3, &&f0xb4, &&f0xb5, &&f0xb6, &&f0xb7,
-/* 0xb8 */	&&f0xb8, &&f0xb9, &&f0xba, &&f0xbb, &&f0xbc, &&f0xbd, &&f0xbe, &&f0xbf,
-/* 0xc0 */	&&f0xc0, &&f0xc1, &&f0xc2, &&f0xc3_fast, &&f0xc4, &&f0xc5, &&f0xc6, &&f0xc7,
-/* 0xc8 */	&&f0xc8, &&f0xc9, &&f0xca, &&f0xcb, &&f0xcc, &&f0xcd, &&f0xce, &&f0xcf,
-/* 0xd0 */	&&f0xd0, &&f0xd1_fast, &&f0xd2, &&f0xd3, &&f0xd4, &&f0xd5, &&f0xd6, &&f0xd7,
+/* 0xa8 */	&&f0xa8_fast, &&f0xa9_fast, &&f0xaa, &&f0xab, &&f0xac, &&f0xad, &&f0xae, &&f0xaf,
+/* 0xb0 */	&&f0xb0_fast, &&f0xb1_fast, &&f0xb2_fast, &&f0xb3_fast, &&f0xb4_fast, &&f0xb5_fast, &&f0xb6_fast, &&f0xb7_fast,
+/* 0xb8 */	&&f0xb8_fast, &&f0xb9_fast, &&f0xba_fast, &&f0xbb_fast, &&f0xbc_fast, &&f0xbd_fast, &&f0xbe_fast, &&f0xbf_fast,
+/* 0xc0 */	&&f0xc0, &&f0xc1_fast, &&f0xc2_fast, &&f0xc3_fast, &&f0xc4, &&f0xc5, &&f0xc6, &&f0xc7,
+/* 0xc8 */	&&f0xc8, &&f0xc9_fast, &&f0xca, &&f0xcb, &&f0xcc, &&f0xcd, &&f0xce, &&f0xcf,
+/* 0xd0 */	&&f0xd0, &&f0xd1_fast, &&f0xd2, &&f0xd3_fast, &&f0xd4, &&f0xd5, &&f0xd6, &&f0xd7,
 /* 0xd8 */	&&f0xd8, &&f0xd9, &&f0xda, &&f0xdb, &&f0xdc, &&f0xdd, &&f0xde, &&f0xdf,
-/* 0xe0 */	&&f0xe0, &&f0xe1, &&f0xe2, &&f0xe3, &&f0xe4, &&f0xe5, &&f0xe6, &&f0xe7,
-/* 0xe8 */	&&f0xe8_fast, &&f0xe9, &&f0xea, &&f0xeb_fast, &&f0xec, &&f0xed, &&f0xee, &&f0xef,
-/* 0xf0 */	&&pfxf0, &&f0xf1, &&pfxf2, &&pfxf3, &&f0xf4, &&f0xf5, &&f0xf6, &&f0xf7,
+/* 0xe0 */	&&f0xe0_fast, &&f0xe1_fast, &&f0xe2_fast, &&f0xe3_fast, &&f0xe4, &&f0xe5, &&f0xe6, &&f0xe7,
+/* 0xe8 */	&&f0xe8_fast, &&f0xe9_fast, &&f0xea, &&f0xeb_fast, &&f0xec, &&f0xed, &&f0xee, &&f0xef,
+/* 0xf0 */	&&pfxf0, &&f0xf1, &&pfxf2, &&pfxf3, &&f0xf4, &&f0xf5, &&f0xf6, &&f0xf7_fast,
 /* 0xf8 */	&&f0xf8, &&f0xf9, &&f0xfa, &&f0xfb, &&f0xfc, &&f0xfd, &&f0xfe, &&f0xff,
 	};
 	PROF_OP(b1);
@@ -3993,6 +3993,73 @@ static bool IRAM_ATTR_CPU_EXEC1 cpu_exec1(CPUI386 *cpu, int stepcount)
 		u8 disp8;
 		TRY(fetch8(cpu, &disp8));
 		cpu->next_ip += (sword)(s8)disp8;
+		ebreak;
+	}
+
+	f0xe9_fast: { // JMP near - 16/32-bit displacement
+		PROF_TOTAL();
+		if (opsz16) {
+			u16 disp16;
+			TRY(fetch16(cpu, &disp16));
+			cpu->next_ip += (sword)(s16)disp16;
+		} else {
+			u32 disp32;
+			TRY(fetch32(cpu, &disp32));
+			cpu->next_ip += (sword)(s32)disp32;
+		}
+		ebreak;
+	}
+
+	f0xe0_fast: { // LOOPNE/LOOPNZ - decrement CX, jump if CX!=0 and ZF=0
+		PROF_TOTAL();
+		u8 disp8;
+		TRY(fetch8(cpu, &disp8));
+		uword cx;
+		if (adsz16) {
+			cx = --cpu->gprx[1].r16;
+		} else {
+			cx = --cpu->gprx[1].r32;
+		}
+		int zf = likely(!(cpu->cc.mask & ZF)) ? !!(cpu->flags & ZF) : (cpu->cc.dst == 0);
+		if (cx != 0 && !zf) cpu->next_ip += (sword)(s8)disp8;
+		ebreak;
+	}
+
+	f0xe1_fast: { // LOOPE/LOOPZ - decrement CX, jump if CX!=0 and ZF=1
+		PROF_TOTAL();
+		u8 disp8;
+		TRY(fetch8(cpu, &disp8));
+		uword cx;
+		if (adsz16) {
+			cx = --cpu->gprx[1].r16;
+		} else {
+			cx = --cpu->gprx[1].r32;
+		}
+		int zf = likely(!(cpu->cc.mask & ZF)) ? !!(cpu->flags & ZF) : (cpu->cc.dst == 0);
+		if (cx != 0 && zf) cpu->next_ip += (sword)(s8)disp8;
+		ebreak;
+	}
+
+	f0xe2_fast: { // LOOP - decrement CX, jump if CX!=0
+		PROF_TOTAL();
+		u8 disp8;
+		TRY(fetch8(cpu, &disp8));
+		uword cx;
+		if (adsz16) {
+			cx = --cpu->gprx[1].r16;
+		} else {
+			cx = --cpu->gprx[1].r32;
+		}
+		if (cx != 0) cpu->next_ip += (sword)(s8)disp8;
+		ebreak;
+	}
+
+	f0xe3_fast: { // JCXZ/JECXZ - jump if CX/ECX is zero
+		PROF_TOTAL();
+		u8 disp8;
+		TRY(fetch8(cpu, &disp8));
+		uword cx = adsz16 ? cpu->gprx[1].r16 : cpu->gprx[1].r32;
+		if (cx == 0) cpu->next_ip += (sword)(s8)disp8;
 		ebreak;
 	}
 
@@ -4095,6 +4162,54 @@ static bool IRAM_ATTR_CPU_EXEC1 cpu_exec1(CPUI386 *cpu, int stepcount)
 			zf = (cpu->cc.dst == 0);
 		}
 		if (zf || get_SF(cpu) != get_OF(cpu)) cpu->next_ip += (sword)(s8)disp8;
+		ebreak;
+	}
+
+	f0x70_fast: { // JO - jump if OF=1
+		PROF_TOTAL();
+		u8 disp8;
+		TRY(fetch8(cpu, &disp8));
+		if (get_OF(cpu)) cpu->next_ip += (sword)(s8)disp8;
+		ebreak;
+	}
+
+	f0x71_fast: { // JNO - jump if OF=0
+		PROF_TOTAL();
+		u8 disp8;
+		TRY(fetch8(cpu, &disp8));
+		if (!get_OF(cpu)) cpu->next_ip += (sword)(s8)disp8;
+		ebreak;
+	}
+
+	f0x78_fast: { // JS - jump if SF=1
+		PROF_TOTAL();
+		u8 disp8;
+		TRY(fetch8(cpu, &disp8));
+		if (get_SF(cpu)) cpu->next_ip += (sword)(s8)disp8;
+		ebreak;
+	}
+
+	f0x79_fast: { // JNS - jump if SF=0
+		PROF_TOTAL();
+		u8 disp8;
+		TRY(fetch8(cpu, &disp8));
+		if (!get_SF(cpu)) cpu->next_ip += (sword)(s8)disp8;
+		ebreak;
+	}
+
+	f0x7a_fast: { // JP/JPE - jump if PF=1
+		PROF_TOTAL();
+		u8 disp8;
+		TRY(fetch8(cpu, &disp8));
+		if (get_PF(cpu)) cpu->next_ip += (sword)(s8)disp8;
+		ebreak;
+	}
+
+	f0x7b_fast: { // JNP/JPO - jump if PF=0
+		PROF_TOTAL();
+		u8 disp8;
+		TRY(fetch8(cpu, &disp8));
+		if (!get_PF(cpu)) cpu->next_ip += (sword)(s8)disp8;
 		ebreak;
 	}
 
@@ -4795,6 +4910,73 @@ static bool IRAM_ATTR_CPU_EXEC1 cpu_exec1(CPUI386 *cpu, int stepcount)
 	f0x5f_fast: DO_POP_FAST(7)  // POP EDI
 #undef DO_POP_FAST
 
+	f0x98_fast: { // CBW/CWDE - sign extend AL to AX or AX to EAX
+		PROF_TOTAL();
+		if (opsz16) {
+			cpu->gprx[0].r16 = (s16)(s8)cpu->gprx[0].r8[0];
+		} else {
+			cpu->gprx[0].r32 = (s32)(s16)cpu->gprx[0].r16;
+		}
+		ebreak;
+	}
+
+	f0x99_fast: { // CWD/CDQ - sign extend AX to DX:AX or EAX to EDX:EAX
+		PROF_TOTAL();
+		if (opsz16) {
+			cpu->gprx[2].r16 = (s16)cpu->gprx[0].r16 >> 15;
+		} else {
+			cpu->gprx[2].r32 = (s32)cpu->gprx[0].r32 >> 31;
+		}
+		ebreak;
+	}
+
+// XCHG EAX, reg fast paths (0x91-0x97)
+#define DO_XCHG_EAX_FAST(reg_idx) \
+	{ \
+		PROF_TOTAL(); \
+		if (opsz16) { \
+			u16 tmp = cpu->gprx[0].r16; \
+			cpu->gprx[0].r16 = cpu->gprx[reg_idx].r16; \
+			cpu->gprx[reg_idx].r16 = tmp; \
+		} else { \
+			u32 tmp = cpu->gprx[0].r32; \
+			cpu->gprx[0].r32 = cpu->gprx[reg_idx].r32; \
+			cpu->gprx[reg_idx].r32 = tmp; \
+		} \
+		ebreak; \
+	}
+	f0x91_fast: DO_XCHG_EAX_FAST(1)  // XCHG EAX, ECX
+	f0x92_fast: DO_XCHG_EAX_FAST(2)  // XCHG EAX, EDX
+	f0x93_fast: DO_XCHG_EAX_FAST(3)  // XCHG EAX, EBX
+	f0x94_fast: DO_XCHG_EAX_FAST(4)  // XCHG EAX, ESP
+	f0x95_fast: DO_XCHG_EAX_FAST(5)  // XCHG EAX, EBP
+	f0x96_fast: DO_XCHG_EAX_FAST(6)  // XCHG EAX, ESI
+	f0x97_fast: DO_XCHG_EAX_FAST(7)  // XCHG EAX, EDI
+#undef DO_XCHG_EAX_FAST
+
+// MOV r8, imm8 fast paths (0xB0-0xB7)
+#define DO_MOV_R8_IMM_FAST(reg_idx) \
+	{ \
+		PROF_TOTAL(); \
+		u8 imm; \
+		TRY(fetch8(cpu, &imm)); \
+		if (reg_idx > 3) { \
+			cpu->gprx[reg_idx - 4].r8[1] = imm; \
+		} else { \
+			cpu->gprx[reg_idx].r8[0] = imm; \
+		} \
+		ebreak; \
+	}
+	f0xb0_fast: DO_MOV_R8_IMM_FAST(0)  // MOV AL, imm8
+	f0xb1_fast: DO_MOV_R8_IMM_FAST(1)  // MOV CL, imm8
+	f0xb2_fast: DO_MOV_R8_IMM_FAST(2)  // MOV DL, imm8
+	f0xb3_fast: DO_MOV_R8_IMM_FAST(3)  // MOV BL, imm8
+	f0xb4_fast: DO_MOV_R8_IMM_FAST(4)  // MOV AH, imm8
+	f0xb5_fast: DO_MOV_R8_IMM_FAST(5)  // MOV CH, imm8
+	f0xb6_fast: DO_MOV_R8_IMM_FAST(6)  // MOV DH, imm8
+	f0xb7_fast: DO_MOV_R8_IMM_FAST(7)  // MOV BH, imm8
+#undef DO_MOV_R8_IMM_FAST
+
 	f0xc3_fast: { // RET near
 		PROF_TOTAL();
 		OptAddr meml1;
@@ -4810,6 +4992,987 @@ static bool IRAM_ATTR_CPU_EXEC1 cpu_exec1(CPUI386 *cpu, int stepcount)
 		}
 		ebreak;
 	}
+
+	f0xc9_fast: { // LEAVE - set SP to BP, then pop BP
+		PROF_TOTAL();
+		OptAddr meml1;
+		uword sp = cpu->gprx[5].r32;  // EBP
+		if (opsz16) {
+			TRY(translate16(cpu, &meml1, 1, SEG_SS, sp & sp_mask));
+			set_sp(sp + 2, sp_mask);
+			cpu->gprx[5].r16 = laddr16(&meml1);
+		} else {
+			TRY(translate32(cpu, &meml1, 1, SEG_SS, sp & sp_mask));
+			set_sp(sp + 4, sp_mask);
+			cpu->gprx[5].r32 = laddr32(&meml1);
+		}
+		ebreak;
+	}
+
+	f0xc1_fast: { // Group 2 Ev,Ib - shift/rotate by imm8 (SHL/SHR/SAR register only)
+		PROF_TOTAL();
+		u8 peek_modrm;
+		TRY(peek8(cpu, &peek_modrm));
+		int group = (peek_modrm >> 3) & 7;
+		int mod = peek_modrm >> 6;
+
+		// Only fast-path register SHL/SHR/SAR
+		if (likely(mod == 3 && (group == 4 || group == 5 || group == 7))) {
+			cpu->next_ip++; // consume modrm
+			int rm = peek_modrm & 7;
+			u8 shift_imm;
+			TRY(fetch8(cpu, &shift_imm));
+			uword shift = shift_imm & 0x1f;
+			if (shift == 0) {
+				ebreak; // No change to flags or value
+			}
+			if (opsz16) {
+				u16 val = cpu->gprx[rm].r16;
+				if (group == 4) { // SHL
+					cpu->cc.dst = sext16(val << shift);
+					cpu->cc.dst2 = (val >> (16 - shift)) & 1;
+					cpu->cc.op = CC_SHL;
+				} else if (group == 5) { // SHR
+					cpu->cc.dst = sext16(val >> shift);
+					cpu->cc.dst2 = (val >> (shift - 1)) & 1;
+					cpu->cc.op = CC_SHR;
+					cpu->cc.src1 = sext16(val);
+				} else { // SAR
+					cpu->cc.dst = sext16((s16)val >> shift);
+					cpu->cc.dst2 = (val >> (shift - 1)) & 1;
+					cpu->cc.op = CC_SAR;
+				}
+				cpu->cc.mask = CF | PF | ZF | SF | OF;
+				cpu->gprx[rm].r16 = cpu->cc.dst;
+			} else {
+				u32 val = cpu->gprx[rm].r32;
+				if (group == 4) { // SHL
+					cpu->cc.dst = sext32(val << shift);
+					cpu->cc.dst2 = (val >> (32 - shift)) & 1;
+					cpu->cc.op = CC_SHL;
+				} else if (group == 5) { // SHR
+					cpu->cc.dst = sext32(val >> shift);
+					cpu->cc.dst2 = (val >> (shift - 1)) & 1;
+					cpu->cc.op = CC_SHR;
+					cpu->cc.src1 = sext32(val);
+				} else { // SAR
+					cpu->cc.dst = sext32((s32)val >> shift);
+					cpu->cc.dst2 = (val >> (shift - 1)) & 1;
+					cpu->cc.op = CC_SAR;
+				}
+				cpu->cc.mask = CF | PF | ZF | SF | OF;
+				cpu->gprx[rm].r32 = cpu->cc.dst;
+			}
+			ebreak;
+		}
+		// For ROL/ROR/RCL/RCR and memory ops, use original handler
+		goto f0xc1;
+	}
+
+	f0xc2_fast: { // RET imm16 - return and pop imm16 bytes
+		PROF_TOTAL();
+		u16 imm16;
+		TRY(fetch16(cpu, &imm16));
+		OptAddr meml1;
+		uword sp = cpu->gprx[4].r32;
+		if (opsz16) {
+			TRY(translate16(cpu, &meml1, 1, SEG_SS, sp & sp_mask));
+			cpu->next_ip = laddr16(&meml1);
+			set_sp(sp + 2 + imm16, sp_mask);
+		} else {
+			TRY(translate32(cpu, &meml1, 1, SEG_SS, sp & sp_mask));
+			cpu->next_ip = laddr32(&meml1);
+			set_sp(sp + 4 + imm16, sp_mask);
+		}
+		ebreak;
+	}
+
+	f0x84_fast: { // TEST r/m8, r8 - register only fast path
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		if (likely((modrm & 0xC0) == 0xC0)) {
+			int reg = (modrm >> 3) & 7;
+			int rm = modrm & 7;
+			u8 val1 = lreg8(rm);
+			u8 val2 = lreg8(reg);
+			cpu->cc.dst = sext8(val1 & val2);
+			cpu->cc.op = CC_AND;
+			cpu->cc.mask = CF | PF | ZF | SF | OF;
+			ebreak;
+		}
+		// Memory operand - fallback
+		{
+			int reg = (modrm >> 3) & 7;
+			int mod = modrm >> 6;
+			int rm = modrm & 7;
+			TRY(modsib(cpu, adsz16, mod, rm, &addr, &curr_seg));
+			TRY(translate8(cpu, &meml, 1, curr_seg, addr));
+			cpu->cc.dst = sext8(laddr8(&meml) & lreg8(reg));
+			cpu->cc.op = CC_AND;
+			cpu->cc.mask = CF | PF | ZF | SF | OF;
+		}
+		ebreak;
+	}
+
+	f0x88_fast: { // MOV r/m8, r8 - register only fast path
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		if (likely((modrm & 0xC0) == 0xC0)) {
+			int reg = (modrm >> 3) & 7;
+			int rm = modrm & 7;
+			sreg8(rm, lreg8(reg));
+			ebreak;
+		}
+		// Memory operand - fallback
+		{
+			int reg = (modrm >> 3) & 7;
+			int mod = modrm >> 6;
+			int rm = modrm & 7;
+			TRY(modsib(cpu, adsz16, mod, rm, &addr, &curr_seg));
+			TRY(translate8(cpu, &meml, 2, curr_seg, addr));
+			saddr8(&meml, lreg8(reg));
+		}
+		ebreak;
+	}
+
+	f0x8a_fast: { // MOV r8, r/m8 - register only fast path
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		if (likely((modrm & 0xC0) == 0xC0)) {
+			int reg = (modrm >> 3) & 7;
+			int rm = modrm & 7;
+			sreg8(reg, lreg8(rm));
+			ebreak;
+		}
+		// Memory operand - fallback
+		{
+			int reg = (modrm >> 3) & 7;
+			int mod = modrm >> 6;
+			int rm = modrm & 7;
+			TRY(modsib(cpu, adsz16, mod, rm, &addr, &curr_seg));
+			TRY(translate8(cpu, &meml, 1, curr_seg, addr));
+			sreg8(reg, laddr8(&meml));
+		}
+		ebreak;
+	}
+
+	f0x30_fast: { // XOR r/m8, r8
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		if (likely((modrm & 0xC0) == 0xC0)) {
+			int reg = (modrm >> 3) & 7;
+			int rm = modrm & 7;
+			cpu->cc.dst = sext8(lreg8(rm) ^ lreg8(reg));
+			sreg8(rm, cpu->cc.dst);
+			cpu->cc.op = CC_XOR;
+			cpu->cc.mask = CF | PF | ZF | SF | OF;
+			ebreak;
+		}
+		// Memory - inline
+		{
+			int reg = (modrm >> 3) & 7;
+			int mod = modrm >> 6;
+			int rm = modrm & 7;
+			TRY(modsib(cpu, adsz16, mod, rm, &addr, &curr_seg));
+			TRY(translate8(cpu, &meml, 3, curr_seg, addr));
+			cpu->cc.dst = sext8(laddr8(&meml) ^ lreg8(reg));
+			saddr8(&meml, cpu->cc.dst);
+			cpu->cc.op = CC_XOR;
+			cpu->cc.mask = CF | PF | ZF | SF | OF;
+		}
+		ebreak;
+	}
+
+	f0x32_fast: { // XOR r8, r/m8
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		if (likely((modrm & 0xC0) == 0xC0)) {
+			int reg = (modrm >> 3) & 7;
+			int rm = modrm & 7;
+			cpu->cc.dst = sext8(lreg8(reg) ^ lreg8(rm));
+			sreg8(reg, cpu->cc.dst);
+			cpu->cc.op = CC_XOR;
+			cpu->cc.mask = CF | PF | ZF | SF | OF;
+			ebreak;
+		}
+		// Memory - inline
+		{
+			int reg = (modrm >> 3) & 7;
+			int mod = modrm >> 6;
+			int rm = modrm & 7;
+			TRY(modsib(cpu, adsz16, mod, rm, &addr, &curr_seg));
+			TRY(translate8(cpu, &meml, 1, curr_seg, addr));
+			cpu->cc.dst = sext8(lreg8(reg) ^ laddr8(&meml));
+			sreg8(reg, cpu->cc.dst);
+			cpu->cc.op = CC_XOR;
+			cpu->cc.mask = CF | PF | ZF | SF | OF;
+		}
+		ebreak;
+	}
+
+	f0x38_fast: { // CMP r/m8, r8
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		if (likely((modrm & 0xC0) == 0xC0)) {
+			int reg = (modrm >> 3) & 7;
+			int rm = modrm & 7;
+			cpu->cc.src1 = sext8(lreg8(rm));
+			cpu->cc.src2 = sext8(lreg8(reg));
+			cpu->cc.dst = cpu->cc.src1 - cpu->cc.src2;
+			cpu->cc.op = CC_SUB;
+			cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+			ebreak;
+		}
+		// Memory - inline
+		{
+			int reg = (modrm >> 3) & 7;
+			int mod = modrm >> 6;
+			int rm = modrm & 7;
+			TRY(modsib(cpu, adsz16, mod, rm, &addr, &curr_seg));
+			TRY(translate8(cpu, &meml, 1, curr_seg, addr));
+			cpu->cc.src1 = sext8(laddr8(&meml));
+			cpu->cc.src2 = sext8(lreg8(reg));
+			cpu->cc.dst = cpu->cc.src1 - cpu->cc.src2;
+			cpu->cc.op = CC_SUB;
+			cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+		}
+		ebreak;
+	}
+
+	f0x3a_fast: { // CMP r8, r/m8
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		if (likely((modrm & 0xC0) == 0xC0)) {
+			int reg = (modrm >> 3) & 7;
+			int rm = modrm & 7;
+			cpu->cc.src1 = sext8(lreg8(reg));
+			cpu->cc.src2 = sext8(lreg8(rm));
+			cpu->cc.dst = cpu->cc.src1 - cpu->cc.src2;
+			cpu->cc.op = CC_SUB;
+			cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+			ebreak;
+		}
+		// Memory - inline
+		{
+			int reg = (modrm >> 3) & 7;
+			int mod = modrm >> 6;
+			int rm = modrm & 7;
+			TRY(modsib(cpu, adsz16, mod, rm, &addr, &curr_seg));
+			TRY(translate8(cpu, &meml, 1, curr_seg, addr));
+			cpu->cc.src1 = sext8(lreg8(reg));
+			cpu->cc.src2 = sext8(laddr8(&meml));
+			cpu->cc.dst = cpu->cc.src1 - cpu->cc.src2;
+			cpu->cc.op = CC_SUB;
+			cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+		}
+		ebreak;
+	}
+
+	f0x68_fast: { // PUSH imm16/32
+		PROF_TOTAL();
+		OptAddr meml1;
+		uword sp = cpu->gprx[4].r32;
+		if (opsz16) {
+			u16 imm;
+			TRY(fetch16(cpu, &imm));
+			TRY(translate16(cpu, &meml1, 2, SEG_SS, (sp - 2) & sp_mask));
+			set_sp(sp - 2, sp_mask);
+			saddr16(&meml1, imm);
+		} else {
+			u32 imm;
+			TRY(fetch32(cpu, &imm));
+			TRY(translate32(cpu, &meml1, 2, SEG_SS, (sp - 4) & sp_mask));
+			set_sp(sp - 4, sp_mask);
+			saddr32(&meml1, imm);
+		}
+		ebreak;
+	}
+
+	f0x6a_fast: { // PUSH imm8 (sign-extended)
+		PROF_TOTAL();
+		u8 imm8;
+		TRY(fetch8(cpu, &imm8));
+		OptAddr meml1;
+		uword sp = cpu->gprx[4].r32;
+		if (opsz16) {
+			TRY(translate16(cpu, &meml1, 2, SEG_SS, (sp - 2) & sp_mask));
+			set_sp(sp - 2, sp_mask);
+			saddr16(&meml1, (s16)(s8)imm8);
+		} else {
+			TRY(translate32(cpu, &meml1, 2, SEG_SS, (sp - 4) & sp_mask));
+			set_sp(sp - 4, sp_mask);
+			saddr32(&meml1, (s32)(s8)imm8);
+		}
+		ebreak;
+	}
+
+	f0x00_fast: { // ADD r/m8, r8
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		if (likely((modrm & 0xC0) == 0xC0)) {
+			int reg = (modrm >> 3) & 7;
+			int rm = modrm & 7;
+			cpu->cc.src1 = sext8(lreg8(rm));
+			cpu->cc.src2 = sext8(lreg8(reg));
+			cpu->cc.dst = cpu->cc.src1 + cpu->cc.src2;
+			sreg8(rm, cpu->cc.dst);
+			cpu->cc.op = CC_ADD;
+			cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+			ebreak;
+		}
+		// Memory - inline
+		{
+			int reg = (modrm >> 3) & 7;
+			int mod = modrm >> 6;
+			int rm = modrm & 7;
+			TRY(modsib(cpu, adsz16, mod, rm, &addr, &curr_seg));
+			TRY(translate8(cpu, &meml, 3, curr_seg, addr));
+			cpu->cc.src1 = sext8(laddr8(&meml));
+			cpu->cc.src2 = sext8(lreg8(reg));
+			cpu->cc.dst = cpu->cc.src1 + cpu->cc.src2;
+			saddr8(&meml, cpu->cc.dst);
+			cpu->cc.op = CC_ADD;
+			cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+		}
+		ebreak;
+	}
+
+	f0x02_fast: { // ADD r8, r/m8
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		if (likely((modrm & 0xC0) == 0xC0)) {
+			int reg = (modrm >> 3) & 7;
+			int rm = modrm & 7;
+			cpu->cc.src1 = sext8(lreg8(reg));
+			cpu->cc.src2 = sext8(lreg8(rm));
+			cpu->cc.dst = cpu->cc.src1 + cpu->cc.src2;
+			sreg8(reg, cpu->cc.dst);
+			cpu->cc.op = CC_ADD;
+			cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+			ebreak;
+		}
+		// Memory - inline
+		{
+			int reg = (modrm >> 3) & 7;
+			int mod = modrm >> 6;
+			int rm = modrm & 7;
+			TRY(modsib(cpu, adsz16, mod, rm, &addr, &curr_seg));
+			TRY(translate8(cpu, &meml, 1, curr_seg, addr));
+			cpu->cc.src1 = sext8(lreg8(reg));
+			cpu->cc.src2 = sext8(laddr8(&meml));
+			cpu->cc.dst = cpu->cc.src1 + cpu->cc.src2;
+			sreg8(reg, cpu->cc.dst);
+			cpu->cc.op = CC_ADD;
+			cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+		}
+		ebreak;
+	}
+
+	f0x08_fast: { // OR r/m8, r8
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		if (likely((modrm & 0xC0) == 0xC0)) {
+			int reg = (modrm >> 3) & 7;
+			int rm = modrm & 7;
+			cpu->cc.dst = sext8(lreg8(rm) | lreg8(reg));
+			sreg8(rm, cpu->cc.dst);
+			cpu->cc.op = CC_OR;
+			cpu->cc.mask = CF | PF | ZF | SF | OF;
+			ebreak;
+		}
+		// Memory - inline
+		{
+			int reg = (modrm >> 3) & 7;
+			int mod = modrm >> 6;
+			int rm = modrm & 7;
+			TRY(modsib(cpu, adsz16, mod, rm, &addr, &curr_seg));
+			TRY(translate8(cpu, &meml, 3, curr_seg, addr));
+			cpu->cc.dst = sext8(laddr8(&meml) | lreg8(reg));
+			saddr8(&meml, cpu->cc.dst);
+			cpu->cc.op = CC_OR;
+			cpu->cc.mask = CF | PF | ZF | SF | OF;
+		}
+		ebreak;
+	}
+
+	f0x0a_fast: { // OR r8, r/m8
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		if (likely((modrm & 0xC0) == 0xC0)) {
+			int reg = (modrm >> 3) & 7;
+			int rm = modrm & 7;
+			cpu->cc.dst = sext8(lreg8(reg) | lreg8(rm));
+			sreg8(reg, cpu->cc.dst);
+			cpu->cc.op = CC_OR;
+			cpu->cc.mask = CF | PF | ZF | SF | OF;
+			ebreak;
+		}
+		// Memory - inline
+		{
+			int reg = (modrm >> 3) & 7;
+			int mod = modrm >> 6;
+			int rm = modrm & 7;
+			TRY(modsib(cpu, adsz16, mod, rm, &addr, &curr_seg));
+			TRY(translate8(cpu, &meml, 1, curr_seg, addr));
+			cpu->cc.dst = sext8(lreg8(reg) | laddr8(&meml));
+			sreg8(reg, cpu->cc.dst);
+			cpu->cc.op = CC_OR;
+			cpu->cc.mask = CF | PF | ZF | SF | OF;
+		}
+		ebreak;
+	}
+
+	f0x20_fast: { // AND r/m8, r8
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		if (likely((modrm & 0xC0) == 0xC0)) {
+			int reg = (modrm >> 3) & 7;
+			int rm = modrm & 7;
+			cpu->cc.dst = sext8(lreg8(rm) & lreg8(reg));
+			sreg8(rm, cpu->cc.dst);
+			cpu->cc.op = CC_AND;
+			cpu->cc.mask = CF | PF | ZF | SF | OF;
+			ebreak;
+		}
+		// Memory - inline
+		{
+			int reg = (modrm >> 3) & 7;
+			int mod = modrm >> 6;
+			int rm = modrm & 7;
+			TRY(modsib(cpu, adsz16, mod, rm, &addr, &curr_seg));
+			TRY(translate8(cpu, &meml, 3, curr_seg, addr));
+			cpu->cc.dst = sext8(laddr8(&meml) & lreg8(reg));
+			saddr8(&meml, cpu->cc.dst);
+			cpu->cc.op = CC_AND;
+			cpu->cc.mask = CF | PF | ZF | SF | OF;
+		}
+		ebreak;
+	}
+
+	f0x22_fast: { // AND r8, r/m8
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		if (likely((modrm & 0xC0) == 0xC0)) {
+			int reg = (modrm >> 3) & 7;
+			int rm = modrm & 7;
+			cpu->cc.dst = sext8(lreg8(reg) & lreg8(rm));
+			sreg8(reg, cpu->cc.dst);
+			cpu->cc.op = CC_AND;
+			cpu->cc.mask = CF | PF | ZF | SF | OF;
+			ebreak;
+		}
+		// Memory - inline
+		{
+			int reg = (modrm >> 3) & 7;
+			int mod = modrm >> 6;
+			int rm = modrm & 7;
+			TRY(modsib(cpu, adsz16, mod, rm, &addr, &curr_seg));
+			TRY(translate8(cpu, &meml, 1, curr_seg, addr));
+			cpu->cc.dst = sext8(lreg8(reg) & laddr8(&meml));
+			sreg8(reg, cpu->cc.dst);
+			cpu->cc.op = CC_AND;
+			cpu->cc.mask = CF | PF | ZF | SF | OF;
+		}
+		ebreak;
+	}
+
+	f0x28_fast: { // SUB r/m8, r8
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		if (likely((modrm & 0xC0) == 0xC0)) {
+			int reg = (modrm >> 3) & 7;
+			int rm = modrm & 7;
+			cpu->cc.src1 = sext8(lreg8(rm));
+			cpu->cc.src2 = sext8(lreg8(reg));
+			cpu->cc.dst = cpu->cc.src1 - cpu->cc.src2;
+			sreg8(rm, cpu->cc.dst);
+			cpu->cc.op = CC_SUB;
+			cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+			ebreak;
+		}
+		// Memory - inline
+		{
+			int reg = (modrm >> 3) & 7;
+			int mod = modrm >> 6;
+			int rm = modrm & 7;
+			TRY(modsib(cpu, adsz16, mod, rm, &addr, &curr_seg));
+			TRY(translate8(cpu, &meml, 3, curr_seg, addr));
+			cpu->cc.src1 = sext8(laddr8(&meml));
+			cpu->cc.src2 = sext8(lreg8(reg));
+			cpu->cc.dst = cpu->cc.src1 - cpu->cc.src2;
+			saddr8(&meml, cpu->cc.dst);
+			cpu->cc.op = CC_SUB;
+			cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+		}
+		ebreak;
+	}
+
+	f0x2a_fast: { // SUB r8, r/m8
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		if (likely((modrm & 0xC0) == 0xC0)) {
+			int reg = (modrm >> 3) & 7;
+			int rm = modrm & 7;
+			cpu->cc.src1 = sext8(lreg8(reg));
+			cpu->cc.src2 = sext8(lreg8(rm));
+			cpu->cc.dst = cpu->cc.src1 - cpu->cc.src2;
+			sreg8(reg, cpu->cc.dst);
+			cpu->cc.op = CC_SUB;
+			cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+			ebreak;
+		}
+		// Memory - inline
+		{
+			int reg = (modrm >> 3) & 7;
+			int mod = modrm >> 6;
+			int rm = modrm & 7;
+			TRY(modsib(cpu, adsz16, mod, rm, &addr, &curr_seg));
+			TRY(translate8(cpu, &meml, 1, curr_seg, addr));
+			cpu->cc.src1 = sext8(lreg8(reg));
+			cpu->cc.src2 = sext8(laddr8(&meml));
+			cpu->cc.dst = cpu->cc.src1 - cpu->cc.src2;
+			sreg8(reg, cpu->cc.dst);
+			cpu->cc.op = CC_SUB;
+			cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+		}
+		ebreak;
+	}
+
+	f0x11_fast: { // ADC r/m32, r32
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		if (likely((modrm & 0xC0) == 0xC0)) {
+			int reg = (modrm >> 3) & 7;
+			int rm = modrm & 7;
+			int cf = get_CF(cpu);
+			if (opsz16) {
+				cpu->cc.src1 = sext16(cpu->gprx[rm].r16);
+				cpu->cc.src2 = sext16(cpu->gprx[reg].r16);
+				cpu->cc.dst = sext16(cpu->cc.src1 + cpu->cc.src2 + cf);
+				cpu->gprx[rm].r16 = cpu->cc.dst;
+			} else {
+				cpu->cc.src1 = sext32(cpu->gprx[rm].r32);
+				cpu->cc.src2 = sext32(cpu->gprx[reg].r32);
+				cpu->cc.dst = sext32(cpu->cc.src1 + cpu->cc.src2 + cf);
+				cpu->gprx[rm].r32 = cpu->cc.dst;
+			}
+			cpu->cc.op = cf ? CC_ADC : CC_ADD;
+			cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+			ebreak;
+		}
+		goto f0x11;
+	}
+
+	f0x13_fast: { // ADC r32, r/m32
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		if (likely((modrm & 0xC0) == 0xC0)) {
+			int reg = (modrm >> 3) & 7;
+			int rm = modrm & 7;
+			int cf = get_CF(cpu);
+			if (opsz16) {
+				cpu->cc.src1 = sext16(cpu->gprx[reg].r16);
+				cpu->cc.src2 = sext16(cpu->gprx[rm].r16);
+				cpu->cc.dst = sext16(cpu->cc.src1 + cpu->cc.src2 + cf);
+				cpu->gprx[reg].r16 = cpu->cc.dst;
+			} else {
+				cpu->cc.src1 = sext32(cpu->gprx[reg].r32);
+				cpu->cc.src2 = sext32(cpu->gprx[rm].r32);
+				cpu->cc.dst = sext32(cpu->cc.src1 + cpu->cc.src2 + cf);
+				cpu->gprx[reg].r32 = cpu->cc.dst;
+			}
+			cpu->cc.op = cf ? CC_ADC : CC_ADD;
+			cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+			ebreak;
+		}
+		goto f0x13;
+	}
+
+	f0x19_fast: { // SBB r/m32, r32
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		if (likely((modrm & 0xC0) == 0xC0)) {
+			int reg = (modrm >> 3) & 7;
+			int rm = modrm & 7;
+			int cf = get_CF(cpu);
+			if (opsz16) {
+				cpu->cc.src1 = sext16(cpu->gprx[rm].r16);
+				cpu->cc.src2 = sext16(cpu->gprx[reg].r16);
+				cpu->cc.dst = sext16(cpu->cc.src1 - cpu->cc.src2 - cf);
+				cpu->gprx[rm].r16 = cpu->cc.dst;
+			} else {
+				cpu->cc.src1 = sext32(cpu->gprx[rm].r32);
+				cpu->cc.src2 = sext32(cpu->gprx[reg].r32);
+				cpu->cc.dst = sext32(cpu->cc.src1 - cpu->cc.src2 - cf);
+				cpu->gprx[rm].r32 = cpu->cc.dst;
+			}
+			cpu->cc.op = cf ? CC_SBB : CC_SUB;
+			cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+			ebreak;
+		}
+		goto f0x19;
+	}
+
+	f0x1b_fast: { // SBB r32, r/m32
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		if (likely((modrm & 0xC0) == 0xC0)) {
+			int reg = (modrm >> 3) & 7;
+			int rm = modrm & 7;
+			int cf = get_CF(cpu);
+			if (opsz16) {
+				cpu->cc.src1 = sext16(cpu->gprx[reg].r16);
+				cpu->cc.src2 = sext16(cpu->gprx[rm].r16);
+				cpu->cc.dst = sext16(cpu->cc.src1 - cpu->cc.src2 - cf);
+				cpu->gprx[reg].r16 = cpu->cc.dst;
+			} else {
+				cpu->cc.src1 = sext32(cpu->gprx[reg].r32);
+				cpu->cc.src2 = sext32(cpu->gprx[rm].r32);
+				cpu->cc.dst = sext32(cpu->cc.src1 - cpu->cc.src2 - cf);
+				cpu->gprx[reg].r32 = cpu->cc.dst;
+			}
+			cpu->cc.op = cf ? CC_SBB : CC_SUB;
+			cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+			ebreak;
+		}
+		goto f0x1b;
+	}
+
+	f0x86_fast: { // XCHG r/m8, r8
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		if (likely((modrm & 0xC0) == 0xC0)) {
+			int reg = (modrm >> 3) & 7;
+			int rm = modrm & 7;
+			u8 tmp = lreg8(rm);
+			sreg8(rm, lreg8(reg));
+			sreg8(reg, tmp);
+			ebreak;
+		}
+		goto f0x86;
+	}
+
+	f0x87_fast: { // XCHG r/m16/32, r16/32
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		if (likely((modrm & 0xC0) == 0xC0)) {
+			int reg = (modrm >> 3) & 7;
+			int rm = modrm & 7;
+			if (opsz16) {
+				u16 tmp = cpu->gprx[rm].r16;
+				cpu->gprx[rm].r16 = cpu->gprx[reg].r16;
+				cpu->gprx[reg].r16 = tmp;
+			} else {
+				u32 tmp = cpu->gprx[rm].r32;
+				cpu->gprx[rm].r32 = cpu->gprx[reg].r32;
+				cpu->gprx[reg].r32 = tmp;
+			}
+			ebreak;
+		}
+		goto f0x87;
+	}
+
+	f0x69_fast: { // IMUL r16/32, r/m16/32, imm16/32
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		if (likely((modrm & 0xC0) == 0xC0)) {
+			int reg = (modrm >> 3) & 7;
+			int rm = modrm & 7;
+			if (opsz16) {
+				u16 imm;
+				TRY(fetch16(cpu, &imm));
+				cpu->cc.src1 = sext16(cpu->gprx[rm].r16);
+				cpu->cc.src2 = sext16(imm);
+				cpu->cc.dst = cpu->cc.src1 * cpu->cc.src2;
+				cpu->cc.op = CC_IMUL16;
+				cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+				cpu->gprx[reg].r16 = cpu->cc.dst;
+			} else {
+				u32 imm;
+				TRY(fetch32(cpu, &imm));
+				cpu->cc.src1 = sext32(cpu->gprx[rm].r32);
+				cpu->cc.src2 = sext32(imm);
+				int64_t res = (int64_t)(s32)cpu->cc.src1 * (int64_t)(s32)cpu->cc.src2;
+				cpu->cc.dst = res;
+				cpu->cc.dst2 = res >> 32;
+				cpu->cc.op = CC_IMUL32;
+				cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+				cpu->gprx[reg].r32 = cpu->cc.dst;
+			}
+			ebreak;
+		}
+		goto f0x69;
+	}
+
+	f0x6b_fast: { // IMUL r16/32, r/m16/32, imm8
+		PROF_TOTAL();
+		TRY(fetch8(cpu, &modrm));
+		if (likely((modrm & 0xC0) == 0xC0)) {
+			int reg = (modrm >> 3) & 7;
+			int rm = modrm & 7;
+			u8 imm8;
+			TRY(fetch8(cpu, &imm8));
+			if (opsz16) {
+				cpu->cc.src1 = sext16(cpu->gprx[rm].r16);
+				cpu->cc.src2 = sext8(imm8);
+				cpu->cc.dst = cpu->cc.src1 * cpu->cc.src2;
+				cpu->cc.op = CC_IMUL16;
+				cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+				cpu->gprx[reg].r16 = cpu->cc.dst;
+			} else {
+				cpu->cc.src1 = sext32(cpu->gprx[rm].r32);
+				cpu->cc.src2 = sext8(imm8);
+				int64_t res = (int64_t)(s32)cpu->cc.src1 * (int64_t)(s32)cpu->cc.src2;
+				cpu->cc.dst = res;
+				cpu->cc.dst2 = res >> 32;
+				cpu->cc.op = CC_IMUL32;
+				cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+				cpu->gprx[reg].r32 = cpu->cc.dst;
+			}
+			ebreak;
+		}
+		goto f0x6b;
+	}
+
+	f0x04_fast: { // ADD AL, imm8
+		PROF_TOTAL();
+		u8 imm;
+		TRY(fetch8(cpu, &imm));
+		cpu->cc.src1 = sext8(cpu->gprx[0].r8[0]);
+		cpu->cc.src2 = sext8(imm);
+		cpu->cc.dst = cpu->cc.src1 + cpu->cc.src2;
+		cpu->cc.op = CC_ADD;
+		cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+		cpu->gprx[0].r8[0] = cpu->cc.dst;
+		ebreak;
+	}
+
+	f0x0c_fast: { // OR AL, imm8
+		PROF_TOTAL();
+		u8 imm;
+		TRY(fetch8(cpu, &imm));
+		cpu->cc.dst = sext8(cpu->gprx[0].r8[0] | imm);
+		cpu->cc.op = CC_OR;
+		cpu->cc.mask = CF | PF | ZF | SF | OF;
+		cpu->gprx[0].r8[0] = cpu->cc.dst;
+		ebreak;
+	}
+
+	f0x0d_fast: { // OR AX/EAX, imm16/32
+		PROF_TOTAL();
+		if (opsz16) {
+			u16 imm;
+			TRY(fetch16(cpu, &imm));
+			cpu->cc.dst = sext16(cpu->gprx[0].r16 | imm);
+			cpu->gprx[0].r16 = cpu->cc.dst;
+		} else {
+			u32 imm;
+			TRY(fetch32(cpu, &imm));
+			cpu->cc.dst = sext32(cpu->gprx[0].r32 | imm);
+			cpu->gprx[0].r32 = cpu->cc.dst;
+		}
+		cpu->cc.op = CC_OR;
+		cpu->cc.mask = CF | PF | ZF | SF | OF;
+		ebreak;
+	}
+
+	f0x24_fast: { // AND AL, imm8
+		PROF_TOTAL();
+		u8 imm;
+		TRY(fetch8(cpu, &imm));
+		cpu->cc.dst = sext8(cpu->gprx[0].r8[0] & imm);
+		cpu->cc.op = CC_AND;
+		cpu->cc.mask = CF | PF | ZF | SF | OF;
+		cpu->gprx[0].r8[0] = cpu->cc.dst;
+		ebreak;
+	}
+
+	f0x25_fast: { // AND AX/EAX, imm16/32
+		PROF_TOTAL();
+		if (opsz16) {
+			u16 imm;
+			TRY(fetch16(cpu, &imm));
+			cpu->cc.dst = sext16(cpu->gprx[0].r16 & imm);
+			cpu->gprx[0].r16 = cpu->cc.dst;
+		} else {
+			u32 imm;
+			TRY(fetch32(cpu, &imm));
+			cpu->cc.dst = sext32(cpu->gprx[0].r32 & imm);
+			cpu->gprx[0].r32 = cpu->cc.dst;
+		}
+		cpu->cc.op = CC_AND;
+		cpu->cc.mask = CF | PF | ZF | SF | OF;
+		ebreak;
+	}
+
+	f0x34_fast: { // XOR AL, imm8
+		PROF_TOTAL();
+		u8 imm;
+		TRY(fetch8(cpu, &imm));
+		cpu->cc.dst = sext8(cpu->gprx[0].r8[0] ^ imm);
+		cpu->cc.op = CC_XOR;
+		cpu->cc.mask = CF | PF | ZF | SF | OF;
+		cpu->gprx[0].r8[0] = cpu->cc.dst;
+		ebreak;
+	}
+
+	f0x35_fast: { // XOR AX/EAX, imm16/32
+		PROF_TOTAL();
+		if (opsz16) {
+			u16 imm;
+			TRY(fetch16(cpu, &imm));
+			cpu->cc.dst = sext16(cpu->gprx[0].r16 ^ imm);
+			cpu->gprx[0].r16 = cpu->cc.dst;
+		} else {
+			u32 imm;
+			TRY(fetch32(cpu, &imm));
+			cpu->cc.dst = sext32(cpu->gprx[0].r32 ^ imm);
+			cpu->gprx[0].r32 = cpu->cc.dst;
+		}
+		cpu->cc.op = CC_XOR;
+		cpu->cc.mask = CF | PF | ZF | SF | OF;
+		ebreak;
+	}
+
+	f0x05_fast: { // ADD AX/EAX, imm16/32
+		PROF_TOTAL();
+		if (opsz16) {
+			u16 imm;
+			TRY(fetch16(cpu, &imm));
+			cpu->cc.src1 = sext16(cpu->gprx[0].r16);
+			cpu->cc.src2 = sext16(imm);
+			cpu->cc.dst = cpu->cc.src1 + cpu->cc.src2;
+			cpu->gprx[0].r16 = cpu->cc.dst;
+		} else {
+			u32 imm;
+			TRY(fetch32(cpu, &imm));
+			cpu->cc.src1 = sext32(cpu->gprx[0].r32);
+			cpu->cc.src2 = sext32(imm);
+			cpu->cc.dst = cpu->cc.src1 + cpu->cc.src2;
+			cpu->gprx[0].r32 = cpu->cc.dst;
+		}
+		cpu->cc.op = CC_ADD;
+		cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+		ebreak;
+	}
+
+	f0x2c_fast: { // SUB AL, imm8
+		PROF_TOTAL();
+		u8 imm;
+		TRY(fetch8(cpu, &imm));
+		cpu->cc.src1 = sext8(cpu->gprx[0].r8[0]);
+		cpu->cc.src2 = sext8(imm);
+		cpu->cc.dst = cpu->cc.src1 - cpu->cc.src2;
+		cpu->cc.op = CC_SUB;
+		cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+		cpu->gprx[0].r8[0] = cpu->cc.dst;
+		ebreak;
+	}
+
+	f0x2d_fast: { // SUB AX/EAX, imm16/32
+		PROF_TOTAL();
+		if (opsz16) {
+			u16 imm;
+			TRY(fetch16(cpu, &imm));
+			cpu->cc.src1 = sext16(cpu->gprx[0].r16);
+			cpu->cc.src2 = sext16(imm);
+			cpu->cc.dst = cpu->cc.src1 - cpu->cc.src2;
+			cpu->gprx[0].r16 = cpu->cc.dst;
+		} else {
+			u32 imm;
+			TRY(fetch32(cpu, &imm));
+			cpu->cc.src1 = sext32(cpu->gprx[0].r32);
+			cpu->cc.src2 = sext32(imm);
+			cpu->cc.dst = cpu->cc.src1 - cpu->cc.src2;
+			cpu->gprx[0].r32 = cpu->cc.dst;
+		}
+		cpu->cc.op = CC_SUB;
+		cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+		ebreak;
+	}
+
+	f0x3c_fast: { // CMP AL, imm8
+		PROF_TOTAL();
+		u8 imm;
+		TRY(fetch8(cpu, &imm));
+		cpu->cc.src1 = sext8(cpu->gprx[0].r8[0]);
+		cpu->cc.src2 = sext8(imm);
+		cpu->cc.dst = cpu->cc.src1 - cpu->cc.src2;
+		cpu->cc.op = CC_SUB;
+		cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+		ebreak;
+	}
+
+	f0x3d_fast: { // CMP AX/EAX, imm16/32
+		PROF_TOTAL();
+		if (opsz16) {
+			u16 imm;
+			TRY(fetch16(cpu, &imm));
+			cpu->cc.src1 = sext16(cpu->gprx[0].r16);
+			cpu->cc.src2 = sext16(imm);
+			cpu->cc.dst = cpu->cc.src1 - cpu->cc.src2;
+		} else {
+			u32 imm;
+			TRY(fetch32(cpu, &imm));
+			cpu->cc.src1 = sext32(cpu->gprx[0].r32);
+			cpu->cc.src2 = sext32(imm);
+			cpu->cc.dst = cpu->cc.src1 - cpu->cc.src2;
+		}
+		cpu->cc.op = CC_SUB;
+		cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+		ebreak;
+	}
+
+	f0xa8_fast: { // TEST AL, imm8
+		PROF_TOTAL();
+		u8 imm;
+		TRY(fetch8(cpu, &imm));
+		cpu->cc.dst = sext8(cpu->gprx[0].r8[0] & imm);
+		cpu->cc.op = CC_AND;
+		cpu->cc.mask = CF | PF | ZF | SF | OF;
+		ebreak;
+	}
+
+	f0xa9_fast: { // TEST AX/EAX, imm16/32
+		PROF_TOTAL();
+		if (opsz16) {
+			u16 imm;
+			TRY(fetch16(cpu, &imm));
+			cpu->cc.dst = sext16(cpu->gprx[0].r16 & imm);
+		} else {
+			u32 imm;
+			TRY(fetch32(cpu, &imm));
+			cpu->cc.dst = sext32(cpu->gprx[0].r32 & imm);
+		}
+		cpu->cc.op = CC_AND;
+		cpu->cc.mask = CF | PF | ZF | SF | OF;
+		ebreak;
+	}
+
+// MOV reg, imm fast paths (0xB8-0xBF)
+#define DO_MOV_REG_IMM_FAST(reg_idx) \
+	{ \
+		PROF_TOTAL(); \
+		if (opsz16) { \
+			u16 imm; \
+			TRY(fetch16(cpu, &imm)); \
+			cpu->gprx[reg_idx].r16 = imm; \
+		} else { \
+			u32 imm; \
+			TRY(fetch32(cpu, &imm)); \
+			cpu->gprx[reg_idx].r32 = imm; \
+		} \
+		ebreak; \
+	}
+	f0xb8_fast: DO_MOV_REG_IMM_FAST(0)  // MOV EAX, imm
+	f0xb9_fast: DO_MOV_REG_IMM_FAST(1)  // MOV ECX, imm
+	f0xba_fast: DO_MOV_REG_IMM_FAST(2)  // MOV EDX, imm
+	f0xbb_fast: DO_MOV_REG_IMM_FAST(3)  // MOV EBX, imm
+	f0xbc_fast: DO_MOV_REG_IMM_FAST(4)  // MOV ESP, imm
+	f0xbd_fast: DO_MOV_REG_IMM_FAST(5)  // MOV EBP, imm
+	f0xbe_fast: DO_MOV_REG_IMM_FAST(6)  // MOV ESI, imm
+	f0xbf_fast: DO_MOV_REG_IMM_FAST(7)  // MOV EDI, imm
+#undef DO_MOV_REG_IMM_FAST
 
 	f0xe8_fast: { // CALL near relative
 		PROF_TOTAL();
@@ -4889,6 +6052,102 @@ static bool IRAM_ATTR_CPU_EXEC1 cpu_exec1(CPUI386 *cpu, int stepcount)
 		}
 		// For ROL/ROR/RCL/RCR and memory ops, use original handler
 		goto f0xd1;
+	}
+
+	f0xd3_fast: { // Group 2 Ev,CL - shift/rotate by CL (SHL/SHR/SAR register only)
+		PROF_TOTAL();
+		u8 peek_modrm;
+		TRY(peek8(cpu, &peek_modrm));
+		int group = (peek_modrm >> 3) & 7;
+		int mod = peek_modrm >> 6;
+
+		// Only fast-path register SHL/SHR/SAR
+		if (likely(mod == 3 && (group == 4 || group == 5 || group == 7))) {
+			cpu->next_ip++; // consume modrm
+			int rm = peek_modrm & 7;
+			uword shift = cpu->gprx[1].r8[0] & 0x1f; // CL masked to 5 bits
+			if (shift == 0) {
+				ebreak; // No change to flags or value
+			}
+			if (opsz16) {
+				u16 val = cpu->gprx[rm].r16;
+				if (group == 4) { // SHL
+					cpu->cc.dst = sext16(val << shift);
+					cpu->cc.dst2 = (val >> (16 - shift)) & 1;
+					cpu->cc.op = CC_SHL;
+				} else if (group == 5) { // SHR
+					cpu->cc.dst = sext16(val >> shift);
+					cpu->cc.dst2 = (val >> (shift - 1)) & 1;
+					cpu->cc.op = CC_SHR;
+					cpu->cc.src1 = sext16(val);
+				} else { // SAR
+					cpu->cc.dst = sext16((s16)val >> shift);
+					cpu->cc.dst2 = (val >> (shift - 1)) & 1;
+					cpu->cc.op = CC_SAR;
+				}
+				cpu->cc.mask = CF | PF | ZF | SF | OF;
+				cpu->gprx[rm].r16 = cpu->cc.dst;
+			} else {
+				u32 val = cpu->gprx[rm].r32;
+				if (group == 4) { // SHL
+					cpu->cc.dst = sext32(val << shift);
+					cpu->cc.dst2 = (val >> (32 - shift)) & 1;
+					cpu->cc.op = CC_SHL;
+				} else if (group == 5) { // SHR
+					cpu->cc.dst = sext32(val >> shift);
+					cpu->cc.dst2 = (val >> (shift - 1)) & 1;
+					cpu->cc.op = CC_SHR;
+					cpu->cc.src1 = sext32(val);
+				} else { // SAR
+					cpu->cc.dst = sext32((s32)val >> shift);
+					cpu->cc.dst2 = (val >> (shift - 1)) & 1;
+					cpu->cc.op = CC_SAR;
+				}
+				cpu->cc.mask = CF | PF | ZF | SF | OF;
+				cpu->gprx[rm].r32 = cpu->cc.dst;
+			}
+			ebreak;
+		}
+		// For ROL/ROR/RCL/RCR and memory ops, use original handler
+		goto f0xd3;
+	}
+
+	f0xf7_fast: { // Group 3 Ev - TEST/NOT/NEG/MUL/IMUL/DIV/IDIV (NOT/NEG register only)
+		PROF_TOTAL();
+		u8 peek_modrm;
+		TRY(peek8(cpu, &peek_modrm));
+		int group = (peek_modrm >> 3) & 7;
+		int mod = peek_modrm >> 6;
+
+		// Only fast-path register NOT (group 2) and NEG (group 3)
+		if (likely(mod == 3 && (group == 2 || group == 3))) {
+			cpu->next_ip++; // consume modrm
+			int rm = peek_modrm & 7;
+			if (group == 2) { // NOT
+				if (opsz16) {
+					cpu->gprx[rm].r16 = ~cpu->gprx[rm].r16;
+				} else {
+					cpu->gprx[rm].r32 = ~cpu->gprx[rm].r32;
+				}
+			} else { // NEG
+				if (opsz16) {
+					cpu->cc.src1 = sext16(cpu->gprx[rm].r16);
+					cpu->cc.dst = sext16(-cpu->cc.src1);
+					cpu->cc.op = CC_NEG16;
+					cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+					cpu->gprx[rm].r16 = cpu->cc.dst;
+				} else {
+					cpu->cc.src1 = sext32(cpu->gprx[rm].r32);
+					cpu->cc.dst = sext32(-cpu->cc.src1);
+					cpu->cc.op = CC_NEG32;
+					cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+					cpu->gprx[rm].r32 = cpu->cc.dst;
+				}
+			}
+			ebreak;
+		}
+		// For TEST/MUL/IMUL/DIV/IDIV and memory ops, use original handler
+		goto f0xf7;
 	}
 
 #endif
@@ -5040,14 +6299,14 @@ GRPEND
 /* 0x70 */	&&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud,
 /* 0x78 */	&&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud,
 #endif
-/* 0x80 */	&&f0f_0x80, &&f0f_0x81, &&f0f_0x82, &&f0f_0x83, &&f0f_0x84, &&f0f_0x85, &&f0f_0x86, &&f0f_0x87,
-/* 0x88 */	&&f0f_0x88, &&f0f_0x89, &&f0f_0x8a, &&f0f_0x8b, &&f0f_0x8c, &&f0f_0x8d, &&f0f_0x8e, &&f0f_0x8f,
-/* 0x90 */	&&f0f_0x90, &&f0f_0x91, &&f0f_0x92, &&f0f_0x93, &&f0f_0x94, &&f0f_0x95, &&f0f_0x96, &&f0f_0x97,
-/* 0x98 */	&&f0f_0x98, &&f0f_0x99, &&f0f_0x9a, &&f0f_0x9b, &&f0f_0x9c, &&f0f_0x9d, &&f0f_0x9e, &&f0f_0x9f,
+/* 0x80 */	&&f0f_0x80_fast, &&f0f_0x81_fast, &&f0f_0x82_fast, &&f0f_0x83_fast, &&f0f_0x84_fast, &&f0f_0x85_fast, &&f0f_0x86_fast, &&f0f_0x87_fast,
+/* 0x88 */	&&f0f_0x88_fast, &&f0f_0x89_fast, &&f0f_0x8a_fast, &&f0f_0x8b_fast, &&f0f_0x8c_fast, &&f0f_0x8d_fast, &&f0f_0x8e_fast, &&f0f_0x8f_fast,
+/* 0x90 */	&&f0f_0x90_fast, &&f0f_0x91_fast, &&f0f_0x92_fast, &&f0f_0x93_fast, &&f0f_0x94_fast, &&f0f_0x95_fast, &&f0f_0x96_fast, &&f0f_0x97_fast,
+/* 0x98 */	&&f0f_0x98_fast, &&f0f_0x99_fast, &&f0f_0x9a_fast, &&f0f_0x9b_fast, &&f0f_0x9c_fast, &&f0f_0x9d_fast, &&f0f_0x9e_fast, &&f0f_0x9f_fast,
 /* 0xa0 */	&&f0f_0xa0, &&f0f_0xa1, &&f0f_0xa2, &&f0f_0xa3, &&f0f_0xa4, &&f0f_0xa5, &&f0f_ud, &&f0f_ud,
-/* 0xa8 */	&&f0f_0xa8, &&f0f_0xa9, &&f0f_ud, &&f0f_0xab, &&f0f_0xac, &&f0f_0xad, &&f0f_ud, &&f0f_0xaf,
-/* 0xb0 */	&&f0f_0xb0, &&f0f_0xb1, &&f0f_0xb2, &&f0f_0xb3, &&f0f_0xb4, &&f0f_0xb5, &&f0f_0xb6, &&f0f_0xb7,
-/* 0xb8 */	&&f0f_ud, &&f0f_ud, &&f0f_0xba, &&f0f_0xbb, &&f0f_0xbc, &&f0f_0xbd, &&f0f_0xbe, &&f0f_0xbf,
+/* 0xa8 */	&&f0f_0xa8, &&f0f_0xa9, &&f0f_ud, &&f0f_0xab, &&f0f_0xac, &&f0f_0xad, &&f0f_ud, &&f0f_0xaf_fast,
+/* 0xb0 */	&&f0f_0xb0, &&f0f_0xb1, &&f0f_0xb2, &&f0f_0xb3, &&f0f_0xb4, &&f0f_0xb5, &&f0f_0xb6_fast, &&f0f_0xb7_fast,
+/* 0xb8 */	&&f0f_ud, &&f0f_ud, &&f0f_0xba, &&f0f_0xbb, &&f0f_0xbc, &&f0f_0xbd, &&f0f_0xbe_fast, &&f0f_0xbf_fast,
 /* 0xc0 */	&&f0f_0xc0, &&f0f_0xc1, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_0xc7,
 /* 0xc8 */	&&f0f_0xc8, &&f0f_0xc9, &&f0f_0xca, &&f0f_0xcb, &&f0f_0xcc, &&f0f_0xcd, &&f0f_0xce, &&f0f_0xcf,
 #ifdef I386_ENABLE_MMX
@@ -5075,6 +6334,435 @@ GRPEND
 #define I2(_case, _rm, _rwm, _op) _case { _rm(_rwm, _op); ebreak; }
 #include "i386ins.def"
 #undef I2
+
+// MOVZX/MOVSX fast paths - register-to-register with inline memory fallback
+f0f_0xb6_fast: { // MOVZX Gv, Eb - zero-extend byte to word/dword
+	PROF_TOTAL();
+	TRY(fetch8(cpu, &modrm));
+	int dst = (modrm >> 3) & 7;
+	int mod = modrm >> 6;
+	int rm = modrm & 7;
+	if (likely(mod == 3)) {
+		// Register-to-register
+		u8 val = lreg8(rm);
+		if (opsz16) {
+			cpu->gprx[dst].r16 = (u16)val;
+		} else {
+			cpu->gprx[dst].r32 = (u32)val;
+		}
+		ebreak;
+	}
+	// Memory operand - inline path
+	TRY(modsib(cpu, adsz16, mod, rm, &addr, &curr_seg));
+	TRY(translate8(cpu, &meml, 1, curr_seg, addr));
+	u8 val = laddr8(&meml);
+	if (opsz16) {
+		cpu->gprx[dst].r16 = (u16)val;
+	} else {
+		cpu->gprx[dst].r32 = (u32)val;
+	}
+	ebreak;
+}
+
+f0f_0xb7_fast: { // MOVZX Gv, Ew - zero-extend word to dword
+	PROF_TOTAL();
+	TRY(fetch8(cpu, &modrm));
+	int dst = (modrm >> 3) & 7;
+	int mod = modrm >> 6;
+	int rm = modrm & 7;
+	if (likely(mod == 3)) {
+		// Register-to-register
+		u16 val = cpu->gprx[rm].r16;
+		if (opsz16) {
+			cpu->gprx[dst].r16 = val;  // No extension needed
+		} else {
+			cpu->gprx[dst].r32 = (u32)val;
+		}
+		ebreak;
+	}
+	// Memory operand - inline path
+	TRY(modsib(cpu, adsz16, mod, rm, &addr, &curr_seg));
+	TRY(translate16(cpu, &meml, 1, curr_seg, addr));
+	u16 val = laddr16(&meml);
+	if (opsz16) {
+		cpu->gprx[dst].r16 = val;
+	} else {
+		cpu->gprx[dst].r32 = (u32)val;
+	}
+	ebreak;
+}
+
+f0f_0xbe_fast: { // MOVSX Gv, Eb - sign-extend byte to word/dword
+	PROF_TOTAL();
+	TRY(fetch8(cpu, &modrm));
+	int dst = (modrm >> 3) & 7;
+	int mod = modrm >> 6;
+	int rm = modrm & 7;
+	if (likely(mod == 3)) {
+		// Register-to-register
+		s8 val = (s8)lreg8(rm);
+		if (opsz16) {
+			cpu->gprx[dst].r16 = (s16)val;
+		} else {
+			cpu->gprx[dst].r32 = (s32)val;
+		}
+		ebreak;
+	}
+	// Memory operand - inline path
+	TRY(modsib(cpu, adsz16, mod, rm, &addr, &curr_seg));
+	TRY(translate8(cpu, &meml, 1, curr_seg, addr));
+	s8 val = (s8)laddr8(&meml);
+	if (opsz16) {
+		cpu->gprx[dst].r16 = (s16)val;
+	} else {
+		cpu->gprx[dst].r32 = (s32)val;
+	}
+	ebreak;
+}
+
+f0f_0xbf_fast: { // MOVSX Gv, Ew - sign-extend word to dword
+	PROF_TOTAL();
+	TRY(fetch8(cpu, &modrm));
+	int dst = (modrm >> 3) & 7;
+	int mod = modrm >> 6;
+	int rm = modrm & 7;
+	if (likely(mod == 3)) {
+		// Register-to-register
+		s16 val = (s16)cpu->gprx[rm].r16;
+		if (opsz16) {
+			cpu->gprx[dst].r16 = val;  // No extension needed
+		} else {
+			cpu->gprx[dst].r32 = (s32)val;
+		}
+		ebreak;
+	}
+	// Memory operand - inline path
+	TRY(modsib(cpu, adsz16, mod, rm, &addr, &curr_seg));
+	TRY(translate16(cpu, &meml, 1, curr_seg, addr));
+	s16 val = (s16)laddr16(&meml);
+	if (opsz16) {
+		cpu->gprx[dst].r16 = val;
+	} else {
+		cpu->gprx[dst].r32 = (s32)val;
+	}
+	ebreak;
+}
+
+// 2-byte conditional jump fast paths (0x0F 8x) - near jumps with 16/32-bit displacement
+f0f_0x82_fast: { // JB/JC near
+	PROF_TOTAL();
+	if (opsz16) {
+		u16 disp; TRY(fetch16(cpu, &disp));
+		if (get_CF(cpu)) cpu->next_ip += (sword)(s16)disp;
+	} else {
+		u32 disp; TRY(fetch32(cpu, &disp));
+		if (get_CF(cpu)) cpu->next_ip += (sword)(s32)disp;
+	}
+	ebreak;
+}
+
+f0f_0x83_fast: { // JNB/JNC/JAE near
+	PROF_TOTAL();
+	if (opsz16) {
+		u16 disp; TRY(fetch16(cpu, &disp));
+		if (!get_CF(cpu)) cpu->next_ip += (sword)(s16)disp;
+	} else {
+		u32 disp; TRY(fetch32(cpu, &disp));
+		if (!get_CF(cpu)) cpu->next_ip += (sword)(s32)disp;
+	}
+	ebreak;
+}
+
+f0f_0x84_fast: { // JE/JZ near
+	PROF_TOTAL();
+	int zf;
+	if (likely(!(cpu->cc.mask & ZF))) {
+		zf = !!(cpu->flags & ZF);
+	} else {
+		zf = (cpu->cc.dst == 0);
+	}
+	if (opsz16) {
+		u16 disp; TRY(fetch16(cpu, &disp));
+		if (zf) cpu->next_ip += (sword)(s16)disp;
+	} else {
+		u32 disp; TRY(fetch32(cpu, &disp));
+		if (zf) cpu->next_ip += (sword)(s32)disp;
+	}
+	ebreak;
+}
+
+f0f_0x85_fast: { // JNE/JNZ near
+	PROF_TOTAL();
+	int zf;
+	if (likely(!(cpu->cc.mask & ZF))) {
+		zf = !!(cpu->flags & ZF);
+	} else {
+		zf = (cpu->cc.dst == 0);
+	}
+	if (opsz16) {
+		u16 disp; TRY(fetch16(cpu, &disp));
+		if (!zf) cpu->next_ip += (sword)(s16)disp;
+	} else {
+		u32 disp; TRY(fetch32(cpu, &disp));
+		if (!zf) cpu->next_ip += (sword)(s32)disp;
+	}
+	ebreak;
+}
+
+f0f_0x86_fast: { // JBE/JNA near
+	PROF_TOTAL();
+	int zf;
+	if (likely(!(cpu->cc.mask & ZF))) {
+		zf = !!(cpu->flags & ZF);
+	} else {
+		zf = (cpu->cc.dst == 0);
+	}
+	if (opsz16) {
+		u16 disp; TRY(fetch16(cpu, &disp));
+		if (get_CF(cpu) || zf) cpu->next_ip += (sword)(s16)disp;
+	} else {
+		u32 disp; TRY(fetch32(cpu, &disp));
+		if (get_CF(cpu) || zf) cpu->next_ip += (sword)(s32)disp;
+	}
+	ebreak;
+}
+
+f0f_0x87_fast: { // JA/JNBE near
+	PROF_TOTAL();
+	int zf;
+	if (likely(!(cpu->cc.mask & ZF))) {
+		zf = !!(cpu->flags & ZF);
+	} else {
+		zf = (cpu->cc.dst == 0);
+	}
+	if (opsz16) {
+		u16 disp; TRY(fetch16(cpu, &disp));
+		if (!get_CF(cpu) && !zf) cpu->next_ip += (sword)(s16)disp;
+	} else {
+		u32 disp; TRY(fetch32(cpu, &disp));
+		if (!get_CF(cpu) && !zf) cpu->next_ip += (sword)(s32)disp;
+	}
+	ebreak;
+}
+
+f0f_0x8c_fast: { // JL/JNGE near
+	PROF_TOTAL();
+	if (opsz16) {
+		u16 disp; TRY(fetch16(cpu, &disp));
+		if (get_SF(cpu) != get_OF(cpu)) cpu->next_ip += (sword)(s16)disp;
+	} else {
+		u32 disp; TRY(fetch32(cpu, &disp));
+		if (get_SF(cpu) != get_OF(cpu)) cpu->next_ip += (sword)(s32)disp;
+	}
+	ebreak;
+}
+
+f0f_0x8d_fast: { // JGE/JNL near
+	PROF_TOTAL();
+	if (opsz16) {
+		u16 disp; TRY(fetch16(cpu, &disp));
+		if (get_SF(cpu) == get_OF(cpu)) cpu->next_ip += (sword)(s16)disp;
+	} else {
+		u32 disp; TRY(fetch32(cpu, &disp));
+		if (get_SF(cpu) == get_OF(cpu)) cpu->next_ip += (sword)(s32)disp;
+	}
+	ebreak;
+}
+
+f0f_0x8e_fast: { // JLE/JNG near
+	PROF_TOTAL();
+	int zf;
+	if (likely(!(cpu->cc.mask & ZF))) {
+		zf = !!(cpu->flags & ZF);
+	} else {
+		zf = (cpu->cc.dst == 0);
+	}
+	if (opsz16) {
+		u16 disp; TRY(fetch16(cpu, &disp));
+		if (zf || get_SF(cpu) != get_OF(cpu)) cpu->next_ip += (sword)(s16)disp;
+	} else {
+		u32 disp; TRY(fetch32(cpu, &disp));
+		if (zf || get_SF(cpu) != get_OF(cpu)) cpu->next_ip += (sword)(s32)disp;
+	}
+	ebreak;
+}
+
+f0f_0x80_fast: { // JO near
+	PROF_TOTAL();
+	if (opsz16) {
+		u16 disp; TRY(fetch16(cpu, &disp));
+		if (get_OF(cpu)) cpu->next_ip += (sword)(s16)disp;
+	} else {
+		u32 disp; TRY(fetch32(cpu, &disp));
+		if (get_OF(cpu)) cpu->next_ip += (sword)(s32)disp;
+	}
+	ebreak;
+}
+
+f0f_0x81_fast: { // JNO near
+	PROF_TOTAL();
+	if (opsz16) {
+		u16 disp; TRY(fetch16(cpu, &disp));
+		if (!get_OF(cpu)) cpu->next_ip += (sword)(s16)disp;
+	} else {
+		u32 disp; TRY(fetch32(cpu, &disp));
+		if (!get_OF(cpu)) cpu->next_ip += (sword)(s32)disp;
+	}
+	ebreak;
+}
+
+f0f_0x88_fast: { // JS near
+	PROF_TOTAL();
+	if (opsz16) {
+		u16 disp; TRY(fetch16(cpu, &disp));
+		if (get_SF(cpu)) cpu->next_ip += (sword)(s16)disp;
+	} else {
+		u32 disp; TRY(fetch32(cpu, &disp));
+		if (get_SF(cpu)) cpu->next_ip += (sword)(s32)disp;
+	}
+	ebreak;
+}
+
+f0f_0x89_fast: { // JNS near
+	PROF_TOTAL();
+	if (opsz16) {
+		u16 disp; TRY(fetch16(cpu, &disp));
+		if (!get_SF(cpu)) cpu->next_ip += (sword)(s16)disp;
+	} else {
+		u32 disp; TRY(fetch32(cpu, &disp));
+		if (!get_SF(cpu)) cpu->next_ip += (sword)(s32)disp;
+	}
+	ebreak;
+}
+
+f0f_0x8a_fast: { // JP near
+	PROF_TOTAL();
+	if (opsz16) {
+		u16 disp; TRY(fetch16(cpu, &disp));
+		if (get_PF(cpu)) cpu->next_ip += (sword)(s16)disp;
+	} else {
+		u32 disp; TRY(fetch32(cpu, &disp));
+		if (get_PF(cpu)) cpu->next_ip += (sword)(s32)disp;
+	}
+	ebreak;
+}
+
+f0f_0x8b_fast: { // JNP near
+	PROF_TOTAL();
+	if (opsz16) {
+		u16 disp; TRY(fetch16(cpu, &disp));
+		if (!get_PF(cpu)) cpu->next_ip += (sword)(s16)disp;
+	} else {
+		u32 disp; TRY(fetch32(cpu, &disp));
+		if (!get_PF(cpu)) cpu->next_ip += (sword)(s32)disp;
+	}
+	ebreak;
+}
+
+f0f_0x8f_fast: { // JG/JNLE near
+	PROF_TOTAL();
+	int zf;
+	if (likely(!(cpu->cc.mask & ZF))) {
+		zf = !!(cpu->flags & ZF);
+	} else {
+		zf = (cpu->cc.dst == 0);
+	}
+	if (opsz16) {
+		u16 disp; TRY(fetch16(cpu, &disp));
+		if (!zf && get_SF(cpu) == get_OF(cpu)) cpu->next_ip += (sword)(s16)disp;
+	} else {
+		u32 disp; TRY(fetch32(cpu, &disp));
+		if (!zf && get_SF(cpu) == get_OF(cpu)) cpu->next_ip += (sword)(s32)disp;
+	}
+	ebreak;
+}
+
+// SETcc fast paths - set byte based on condition (register only)
+#define DO_SETcc_FAST(label, cond) \
+label: { \
+	PROF_TOTAL(); \
+	u8 modrm_byte; \
+	TRY(fetch8(cpu, &modrm_byte)); \
+	if (likely((modrm_byte & 0xC0) == 0xC0)) { \
+		int rm = modrm_byte & 7; \
+		if (rm > 3) { \
+			cpu->gprx[rm - 4].r8[1] = (cond) ? 1 : 0; \
+		} else { \
+			cpu->gprx[rm].r8[0] = (cond) ? 1 : 0; \
+		} \
+		ebreak; \
+	} \
+	goto f0f_0x90; /* fallback for memory */ \
+}
+
+DO_SETcc_FAST(f0f_0x90_fast, get_OF(cpu))           // SETO
+DO_SETcc_FAST(f0f_0x91_fast, !get_OF(cpu))          // SETNO
+DO_SETcc_FAST(f0f_0x92_fast, get_CF(cpu))           // SETB/SETC
+DO_SETcc_FAST(f0f_0x93_fast, !get_CF(cpu))          // SETNB/SETNC/SETAE
+DO_SETcc_FAST(f0f_0x94_fast, (likely(!(cpu->cc.mask & ZF)) ? !!(cpu->flags & ZF) : (cpu->cc.dst == 0)))  // SETE/SETZ
+DO_SETcc_FAST(f0f_0x95_fast, (likely(!(cpu->cc.mask & ZF)) ? !(cpu->flags & ZF) : (cpu->cc.dst != 0)))   // SETNE/SETNZ
+DO_SETcc_FAST(f0f_0x96_fast, get_CF(cpu) || (likely(!(cpu->cc.mask & ZF)) ? !!(cpu->flags & ZF) : (cpu->cc.dst == 0)))  // SETBE/SETNA
+DO_SETcc_FAST(f0f_0x97_fast, !get_CF(cpu) && (likely(!(cpu->cc.mask & ZF)) ? !(cpu->flags & ZF) : (cpu->cc.dst != 0)))  // SETA/SETNBE
+DO_SETcc_FAST(f0f_0x98_fast, get_SF(cpu))           // SETS
+DO_SETcc_FAST(f0f_0x99_fast, !get_SF(cpu))          // SETNS
+DO_SETcc_FAST(f0f_0x9a_fast, get_PF(cpu))           // SETP/SETPE
+DO_SETcc_FAST(f0f_0x9b_fast, !get_PF(cpu))          // SETNP/SETPO
+DO_SETcc_FAST(f0f_0x9c_fast, get_SF(cpu) != get_OF(cpu))  // SETL/SETNGE
+DO_SETcc_FAST(f0f_0x9d_fast, get_SF(cpu) == get_OF(cpu))  // SETGE/SETNL
+DO_SETcc_FAST(f0f_0x9e_fast, (likely(!(cpu->cc.mask & ZF)) ? !!(cpu->flags & ZF) : (cpu->cc.dst == 0)) || get_SF(cpu) != get_OF(cpu))  // SETLE/SETNG
+DO_SETcc_FAST(f0f_0x9f_fast, (likely(!(cpu->cc.mask & ZF)) ? !(cpu->flags & ZF) : (cpu->cc.dst != 0)) && get_SF(cpu) == get_OF(cpu))   // SETG/SETNLE
+#undef DO_SETcc_FAST
+
+f0f_0xaf_fast: { // IMUL Gv, Ev - signed multiply reg *= r/m
+	PROF_TOTAL();
+	TRY(fetch8(cpu, &modrm));
+	int reg = (modrm >> 3) & 7;
+	int mod = modrm >> 6;
+	int rm = modrm & 7;
+	if (likely(mod == 3)) {
+		// Register-to-register
+		if (opsz16) {
+			cpu->cc.src1 = sext16(cpu->gprx[reg].r16);
+			cpu->cc.src2 = sext16(cpu->gprx[rm].r16);
+			cpu->cc.dst = cpu->cc.src1 * cpu->cc.src2;
+			cpu->cc.op = CC_IMUL16;
+			cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+			cpu->gprx[reg].r16 = cpu->cc.dst;
+		} else {
+			cpu->cc.src1 = sext32(cpu->gprx[reg].r32);
+			cpu->cc.src2 = sext32(cpu->gprx[rm].r32);
+			int64_t res = (int64_t)(s32)cpu->cc.src1 * (int64_t)(s32)cpu->cc.src2;
+			cpu->cc.dst = res;
+			cpu->cc.dst2 = res >> 32;
+			cpu->cc.op = CC_IMUL32;
+			cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+			cpu->gprx[reg].r32 = cpu->cc.dst;
+		}
+		ebreak;
+	}
+	// Memory operand - inline path
+	TRY(modsib(cpu, adsz16, mod, rm, &addr, &curr_seg));
+	if (opsz16) {
+		TRY(translate16(cpu, &meml, 1, curr_seg, addr));
+		cpu->cc.src1 = sext16(cpu->gprx[reg].r16);
+		cpu->cc.src2 = sext16(laddr16(&meml));
+		cpu->cc.dst = cpu->cc.src1 * cpu->cc.src2;
+		cpu->cc.op = CC_IMUL16;
+		cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+		cpu->gprx[reg].r16 = cpu->cc.dst;
+	} else {
+		TRY(translate32(cpu, &meml, 1, curr_seg, addr));
+		cpu->cc.src1 = sext32(cpu->gprx[reg].r32);
+		cpu->cc.src2 = sext32(laddr32(&meml));
+		int64_t res = (int64_t)(s32)cpu->cc.src1 * (int64_t)(s32)cpu->cc.src2;
+		cpu->cc.dst = res;
+		cpu->cc.dst2 = res >> 32;
+		cpu->cc.op = CC_IMUL32;
+		cpu->cc.mask = CF | PF | AF | ZF | SF | OF;
+		cpu->gprx[reg].r32 = cpu->cc.dst;
+	}
+	ebreak;
+}
 
 // Restore CX to case syntax for group instruction inner switches
 #undef CX
