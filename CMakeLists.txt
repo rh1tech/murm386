@@ -146,34 +146,34 @@ add_subdirectory(drivers/usbhid)
 #=============================================================================
 set(EMU_CORE_SOURCES
     # CPU and core
-    i386.c
-    i386_arm.S   # ARM assembly optimizations for hot paths
-    pc.c
+    src/i386.c
+    src/i386_arm.S   # ARM assembly optimizations for hot paths
+    src/pc.c
 
     # Peripheral chips
-    i8042.c      # Keyboard controller
-    i8254.c      # Timer
-    i8257.c      # DMA
-    i8259.c      # PIC
+    src/i8042.c      # Keyboard controller
+    src/i8254.c      # Timer
+    src/i8257.c      # DMA
+    src/i8259.c      # PIC
 
     # Devices
-    vga.c        # VGA emulation
-    disk.c       # INT 13h disk handler (from pico-286)
-    pci.c        # PCI bus
-    misc.c       # Serial, RTC, CMOS
+    src/vga.c        # VGA emulation
+    src/disk.c       # INT 13h disk handler (from pico-286)
+    src/pci.c        # PCI bus
+    src/misc.c       # Serial, RTC, CMOS
 
     # Sound devices
-    adlib.c      # Adlib/OPL2
-    sb16.c       # Sound Blaster 16
-    pcspk.c      # PC Speaker
-    fmopl.c      # FM OPL synthesis engine
+    src/adlib.c      # Adlib/OPL2
+    src/sb16.c       # Sound Blaster 16
+    src/pcspk.c      # PC Speaker
+    src/fmopl.c      # FM OPL synthesis engine
 
     # Optional devices (can be disabled for size)
-    # fpu.c      # FPU emulation - disabled for initial port
-    # ne2000.c   # Network - disabled for initial port
+    # src/fpu.c      # FPU emulation - disabled for initial port
+    # src/ne2000.c   # Network - disabled for initial port
 
     # Configuration
-    ini.c
+    src/ini.c
 )
 
 #=============================================================================
@@ -249,7 +249,7 @@ target_compile_options(murm386 PRIVATE
 )
 
 # ARM assembly flags for Cortex-M33
-set_source_files_properties(i386_arm.S PROPERTIES
+set_source_files_properties(src/i386_arm.S PROPERTIES
     COMPILE_FLAGS "-mcpu=cortex-m33 -mthumb"
 )
 
