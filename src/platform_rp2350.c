@@ -1,9 +1,10 @@
 /**
- * Platform Integration Layer for RP2350
+ * murm386 - i386 PC Emulator for RP2350
  *
- * Provides POSIX-like compatibility functions and platform-specific
- * implementations for the 386 emulator to run on RP2350 (Pico 2).
+ * Platform Integration Layer - provides POSIX-like compatibility functions
+ * and platform-specific implementations for RP2350 (Pico 2).
  *
+ * Copyright (c) 2026 Mikhail Matveev <xtreme@rh1.tech>
  * SPDX-License-Identifier: MIT
  */
 

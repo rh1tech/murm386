@@ -1,7 +1,11 @@
 /**
- * Disk UI for murm386
+ * murm386 - i386 PC Emulator for RP2350
  *
- * On-screen disk manager for inserting/ejecting disk images at runtime.
+ * Disk UI - on-screen disk manager for inserting/ejecting disk images
+ * at runtime. Triggered by Win+F12 hotkey.
+ *
+ * Copyright (c) 2026 Mikhail Matveev <xtreme@rh1.tech>
+ * SPDX-License-Identifier: MIT
  */
 
 #include "diskui.h"

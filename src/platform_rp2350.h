@@ -1,8 +1,9 @@
 /**
- * Platform Integration Layer for RP2350 - Header
+ * murm386 - i386 PC Emulator for RP2350
  *
- * Platform-specific declarations for the 386 emulator on RP2350 (Pico 2).
+ * Platform Integration Layer - platform-specific declarations for RP2350.
  *
+ * Copyright (c) 2026 Mikhail Matveev <xtreme@rh1.tech>
  * SPDX-License-Identifier: MIT
  */
 

@@ -1,7 +1,10 @@
 /**
- * Configuration Save for murm386
+ * murm386 - i386 PC Emulator for RP2350
  *
- * Writes configuration to INI file on SD card.
+ * Configuration Save - writes configuration to INI file on SD card.
+ *
+ * Copyright (c) 2026 Mikhail Matveev <xtreme@rh1.tech>
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef CONFIG_SAVE_H

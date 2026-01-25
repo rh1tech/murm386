@@ -1,8 +1,11 @@
 /**
- * Settings UI for murm386
+ * murm386 - i386 PC Emulator for RP2350
  *
- * On-screen settings manager triggered by Win+F11.
- * Allows changing emulator configuration at runtime.
+ * Settings UI - on-screen settings manager for changing emulator
+ * configuration at runtime. Triggered by Win+F11 hotkey.
+ *
+ * Copyright (c) 2026 Mikhail Matveev <xtreme@rh1.tech>
+ * SPDX-License-Identifier: MIT
  */
 
 #ifndef SETTINGSUI_H
