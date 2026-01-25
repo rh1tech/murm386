@@ -134,11 +134,6 @@ struct CPUI386 {
 	/* INT 13h disk handler hook */
 	void (*int13_handler)(struct CPUI386 *cpu, void *opaque);
 	void *int13_opaque;
-
-#ifdef JIT_ENABLED
-	/* JIT compiler context */
-	void *jit;
-#endif
 };
 
 typedef struct CPUI386 CPUI386;
@@ -146,9 +141,6 @@ typedef struct CPUI386 CPUI386;
 CPUI386 *cpui386_new(int gen, char *phys_mem, long phys_mem_size, CPU_CB **cb);
 void cpui386_delete(CPUI386 *cpu);
 void cpui386_enable_fpu(CPUI386 *cpu);
-#ifdef JIT_ENABLED
-void cpui386_enable_jit(CPUI386 *cpu);
-#endif
 void cpui386_reset(CPUI386 *cpu);
 void cpui386_reset_pm(CPUI386 *cpu, uint32_t start_addr);
 void cpui386_step(CPUI386 *cpu, int stepcount);
@@ -206,5 +198,11 @@ long cpu_get_phys_mem_size(CPUI386 *cpu);
 // INT 13h disk handler callback
 typedef void (*int13_handler_t)(CPUI386 *cpu, void *opaque);
 void cpu_set_int13_handler(CPUI386 *cpu, int13_handler_t handler, void *opaque);
+
+/* Profiling support (enable with -DI386_PROFILE) */
+#ifdef I386_PROFILE
+void i386_profile_dump(void);
+void i386_profile_reset(void);
+#endif
 
 #endif /* I386_H */

@@ -452,6 +452,17 @@ void pc_step(PC *pc)
 	cpui386_step(pc->cpu, 10240);
 #endif
 #endif
+
+#ifdef I386_PROFILE
+	/* Dump profile every ~10M instructions */
+	static uint32_t prof_dump_counter = 0;
+	prof_dump_counter += 4096;
+	if (prof_dump_counter >= 10000000) {
+		i386_profile_dump();
+		i386_profile_reset();
+		prof_dump_counter = 0;
+	}
+#endif
 }
 
 static void raise_irq(void *o, PicState2 *s)
@@ -598,9 +609,6 @@ PC *pc_new(SimpleFBDrawFunc *redraw, void (*poll)(void *), void *redraw_data,
 	pc->cpu = cpui386_new(conf->cpu_gen, mem, conf->mem_size, &cb);
 	if (conf->fpu)
 		cpui386_enable_fpu(pc->cpu);
-#ifdef JIT_ENABLED
-	cpui386_enable_jit(pc->cpu);
-#endif
 #endif
 	pc->bios = conf->bios;
 	pc->vga_bios = conf->vga_bios;
