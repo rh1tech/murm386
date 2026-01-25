@@ -147,14 +147,6 @@ static uint8_t frame_pixel_panning = 0; // Snapshotted at start of frame
 static int line_compare = -1;           // Line Compare register (-1 = disabled/off-screen)
 static int frame_line_compare = -1;     // Snapshotted at start of frame
 
-// Graphics mode scanline buffer - pre-rendered lines in SRAM
-// We keep 32 pre-rendered lines (800 bytes each) for smooth display
-// 32 * 800 = 25.6 KB - should be enough lead time
-#define GFX_LINE_BUFFER_COUNT 32
-static uint8_t gfx_line_buffer[GFX_LINE_BUFFER_COUNT][800] __attribute__((aligned(4)));
-static volatile uint32_t gfx_buffer_line[GFX_LINE_BUFFER_COUNT];  // Which line is in each buffer (0xFFFFFFFF = invalid)
-static volatile uint32_t gfx_next_render_line = 0;  // Next line to render to buffer
-
 // Debug counters
 static volatile uint32_t gfx_prerender_count = 0;
 static volatile uint32_t gfx_fallback_count = 0;
@@ -262,56 +254,6 @@ static void init_palettes(void) {
 // ============================================================================
 // DMA Interrupt Handler - Renders each scanline
 // ============================================================================
-
-// Pre-render a graphics line from PSRAM to SRAM buffer
-// Called from vga_hw_update() on Core 1 main loop, NOT from IRQ
-// Uses dithered 16-bit palette for ~2197 perceived colors
-static void prerender_gfx_line(uint32_t line) {
-    if (!vga_ram_psram || line >= N_LINES_VISIBLE) return;
-
-    uint32_t buf_idx = line % GFX_LINE_BUFFER_COUNT;
-
-    // Mode 13h is 320x200, we double to 640x400
-    uint32_t src_line = line / 2;
-    if (src_line >= 200) {
-        memset(gfx_line_buffer[buf_idx] + SHIFT_PICTURE, TMPL_LINE, 640);
-    } else {
-        // Read from PSRAM and apply dithered palette - write 32-bit at a time
-        uint32_t *src32 = (uint32_t *)(vga_ram_psram + (src_line * 320));
-        uint32_t *out32 = (uint32_t *)(gfx_line_buffer[buf_idx] + SHIFT_PICTURE);
-
-        // Each pixel outputs 16 bits (2 bytes) of dithered color
-        for (int i = 0; i < 80; i++) {
-            uint32_t pixels = src32[i];
-            uint16_t p0 = active_palette[pixels & 0xFF];
-            uint16_t p1 = active_palette[(pixels >> 8) & 0xFF];
-            uint16_t p2 = active_palette[(pixels >> 16) & 0xFF];
-            uint16_t p3 = active_palette[pixels >> 24];
-            // Each pixel outputs 16 bits (dithered pair): 4 pixels = 8 bytes = 2 x uint32_t
-            *out32++ = (uint32_t)p0 | ((uint32_t)p1 << 16);
-            *out32++ = (uint32_t)p2 | ((uint32_t)p3 << 16);
-        }
-    }
-
-    // Copy sync portion from template
-    memcpy(gfx_line_buffer[buf_idx], lines_pattern[0], SHIFT_PICTURE);
-
-    gfx_buffer_line[buf_idx] = line;
-    gfx_prerender_count++;
-}
-
-// Copy pre-rendered graphics line to output buffer (fast, from SRAM)
-// If line not yet pre-rendered, output blank line with correct sync
-static void __time_critical_func(copy_gfx_line)(uint32_t line, uint32_t *output_buffer) {
-    uint32_t buf_idx = line % GFX_LINE_BUFFER_COUNT;
-    if (gfx_buffer_line[buf_idx] == line) {
-        memcpy(output_buffer, gfx_line_buffer[buf_idx], LINE_SIZE);
-    } else {
-        // Line not ready or wrong line in buffer - use blank template
-        memcpy(output_buffer, lines_pattern[0], LINE_SIZE);
-        gfx_fallback_count++;
-    }
-}
 
 // Render graphics line directly from SRAM framebuffer (for IRQ use)
 // Uses dithered 16-bit palette for ~2197 perceived colors
@@ -676,11 +618,6 @@ static void __isr __time_critical_func(dma_handler_vga)(void) {
         if (pending_mode >= 0) {
             current_mode = pending_mode;
             pending_mode = -1;
-            // Reset graphics buffer state on mode change
-            for (int i = 0; i < GFX_LINE_BUFFER_COUNT; i++) {
-                gfx_buffer_line[i] = 0xFFFFFFFF;
-            }
-            gfx_next_render_line = 0;
         }
 
         if (gfx_write_done) {
@@ -777,14 +714,7 @@ void vga_hw_init(void) {
     for (int i = 2; i < 6; i++) {
         memcpy(lines_pattern[i], lines_pattern[0], LINE_SIZE);
     }
-    
-    // Initialize graphics line buffers with valid sync template
-    // This ensures even if pre-rendering fails, we output valid sync
-    for (int i = 0; i < GFX_LINE_BUFFER_COUNT; i++) {
-        memcpy(gfx_line_buffer[i], lines_pattern[0], LINE_SIZE);
-        gfx_buffer_line[i] = 0xFFFFFFFF;  // Mark as invalid (no valid line data yet)
-    }
-    
+
     // Initialize PIO
     uint offset = pio_add_program(VGA_PIO, &pio_vga_program);
     vga_sm = pio_claim_unused_sm(VGA_PIO, true);
