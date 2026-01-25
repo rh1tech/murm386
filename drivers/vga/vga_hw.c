@@ -92,8 +92,9 @@ static volatile int update_requested = 0;  // Set by update call
 static volatile int in_vblank = 0;         // Set by IRQ during vblank
 
 // Double-buffered graphics framebuffer in SRAM
-// Increased to 130KB to support 320x400 Mode X (128KB)
-#define GFX_BUFFER_SIZE (130 * 1024)
+// 112KB supports up to 640x350 EGA (81 words * 350 lines * 4 = 113KB)
+// Mode X (320x400) not supported - would need 128KB
+#define GFX_BUFFER_SIZE (112 * 1024)
 static uint8_t gfx_buffer_a[GFX_BUFFER_SIZE] __attribute__((aligned(4)));
 static uint8_t gfx_buffer_b[GFX_BUFFER_SIZE] __attribute__((aligned(4)));
 static uint8_t * volatile gfx_display_buffer = gfx_buffer_a;  // ISR reads from this
