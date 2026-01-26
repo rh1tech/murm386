@@ -298,11 +298,29 @@ This project is based on the following open-source projects:
 - **License:** MIT
 - **Description:** RP2350 platform integration, disk management, VGA driver concepts.
 
-### QuakeGeneric
-- **Project:** [QuakeGeneric](https://github.com/DnCraptor/quakegeneric)
+### QuakeGeneric / MurmDoom
+- **Project:** [QuakeGeneric](https://github.com/DnCraptor/quakegeneric) / [MurmDoom](https://github.com/DnCraptor/murmdoom)
 - **Author:** DnCraptor
 - **License:** GPL v2
-- **Description:** RP2350 hardware integration patterns and Murmulator platform support.
+- **Description:** RP2350 hardware integration patterns, Murmulator platform support, and PS/2 mouse driver implementation.
+
+### QEMU
+- **Project:** [QEMU](https://www.qemu.org/)
+- **Authors:** Fabrice Bellard (2003-2017), Vassili Karpov "malc" (2003-2005), Joachim Henke (2006)
+- **License:** MIT
+- **Description:** PC peripheral emulation code including 8259 PIC, 8254 PIT, 8257 DMA, 8042 keyboard controller, PCI bus, PC speaker, VGA, and AdLib OPL2 proxy.
+
+### MAME FM Sound Generator
+- **Project:** [MAME](https://www.mamedev.org/)
+- **Author:** Tatsuyuki Satoh (1999-2000)
+- **License:** LGPL 2.1+
+- **Description:** FM OPL sound generator (fmopl) for AdLib emulation, forked from MAME and relicensed under LGPL.
+
+### inih
+- **Project:** [inih](https://github.com/benhoyt/inih)
+- **Author:** Ben Hoyt (2009-2020)
+- **License:** BSD 3-Clause
+- **Description:** Simple INI file parser for configuration file handling.
 
 ### SeaBIOS
 - **Project:** [SeaBIOS](https://www.seabios.org/)
@@ -312,6 +330,17 @@ This project is based on the following open-source projects:
 
 ### FatFs
 - **Project:** [FatFs](http://elm-chan.org/fsw/ff/)
-- **Author:** ChaN
+- **Author:** ChaN (2014, 2021)
 - **License:** FatFs License (BSD-style)
 - **Description:** Generic FAT filesystem module for SD card access.
+
+### FatFs Utilities
+- **Author:** Carl John Kugler III (2021)
+- **License:** Apache 2.0
+- **Description:** FatFs utility functions for error handling and result string conversion.
+
+### Raspberry Pi Pico SDK
+- **Project:** [Pico SDK](https://github.com/raspberrypi/pico-sdk)
+- **Author:** Raspberry Pi (Trading) Ltd. (2020)
+- **License:** BSD 3-Clause
+- **Description:** PIO SPI driver for SD card communication.
