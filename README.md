@@ -298,8 +298,8 @@ This project is based on the following open-source projects:
 - **License:** MIT
 - **Description:** RP2350 platform integration, disk management, VGA driver concepts.
 
-### QuakeGeneric / MurmDoom
-- **Project:** [QuakeGeneric](https://github.com/DnCraptor/quakegeneric) / [MurmDoom](https://github.com/DnCraptor/murmdoom)
+### QuakeGeneric
+- **Project:** [QuakeGeneric](https://github.com/DnCraptor/quakegeneric)
 - **Author:** DnCraptor
 - **License:** GPL v2
 - **Description:** RP2350 hardware integration patterns, Murmulator platform support, and PS/2 mouse driver implementation.
