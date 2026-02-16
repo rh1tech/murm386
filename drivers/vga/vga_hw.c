@@ -42,7 +42,7 @@ static const struct pio_program pio_vga_program = {
 };
 
 // ============================================================================
-// VGA Timing (640x400 @ 70Hz - standard VGA text mode timing)
+// VGA Timing (640x400 @ 60Hz - standard? VGA text mode timing)
 // ============================================================================
 
 #define VGA_CLK 25175000.0f
@@ -255,6 +255,58 @@ static void init_palettes(void) {
 // DMA Interrupt Handler - Renders each scanline
 // ============================================================================
 
+// Render VGA 256-color planar (Mode X: 320x200x256, unchained)
+// VRAM layout in our emulator: packed planes in dwords.
+// Each dword holds 4 bytes: plane0..plane3, and those bytes are pixels x%4.
+static void __time_critical_func(render_gfx_line_vga_planar256)(uint32_t line, uint32_t *output_buffer) {
+    uint32_t *out32 = output_buffer + SHIFT_PICTURE / 4;
+
+    uint32_t src_line = (gfx_height > 200) ? line : (line >> 1);
+    if (src_line >= (uint32_t)gfx_height) {
+        uint32_t blank = TMPL_LINE | (TMPL_LINE << 8) | (TMPL_LINE << 16) | (TMPL_LINE << 24);
+        for (int i = 0; i < 160; i++) out32[i] = blank;
+        return;
+    }
+
+    // CRTC Offset (CR13) in words -> dword stride
+    uint32_t stride = (gfx_line_offset > 0) ? ((uint32_t)gfx_line_offset * 2u) : 80u;
+
+    uint32_t base;
+    if (frame_line_compare >= 0 && src_line >= (uint32_t)frame_line_compare) {
+        base = (src_line - frame_line_compare) * stride;
+    } else {
+        base = frame_vram_offset + src_line * stride;
+    }
+    base &= 0xFFFF;
+
+    const uint32_t *src32 = (const uint32_t *)(gfx_buffer + (base * 4));
+
+    // Pixel panning: shift left by N pixels (0..7). In Mode X each pixel is a byte.
+    // Implement as dword offset (+N/4) plus byte-rotation within dwords.
+    uint32_t pan = (uint32_t)(frame_pixel_panning & 7);
+    uint32_t dword_off = (pan >> 2);
+    uint32_t byte_rot = (pan & 3);
+    const uint32_t *p = src32 + dword_off;
+
+    uint16_t *active_palette = (src_line & 1) ? palette_a : palette_b;
+
+    for (int i = 0; i < 80; i++) {
+        uint32_t a = p[i];
+        if (byte_rot) {
+            uint32_t b = (i + 1 < 80) ? p[i + 1] : p[i];
+            uint32_t sh = byte_rot * 8;
+            a = (a >> sh) | (b << (32 - sh));
+        }
+
+        uint16_t p0 = active_palette[a & 0xFF];
+        uint16_t p1 = active_palette[(a >> 8) & 0xFF];
+        uint16_t p2 = active_palette[(a >> 16) & 0xFF];
+        uint16_t p3 = active_palette[a >> 24];
+        *out32++ = (uint32_t)p0 | ((uint32_t)p1 << 16);
+        *out32++ = (uint32_t)p2 | ((uint32_t)p3 << 16);
+    }
+}
+
 // Render graphics line directly from SRAM framebuffer (for IRQ use)
 // Uses dithered 16-bit palette for ~2197 perceived colors
 static void __time_critical_func(render_gfx_line_from_sram)(uint32_t line, uint32_t *output_buffer) {
@@ -281,9 +333,10 @@ static void __time_critical_func(render_gfx_line_from_sram)(uint32_t line, uint3
             *out32++ = (TMPL_LINE) | (TMPL_LINE << 8) | (TMPL_LINE << 16) | (TMPL_LINE << 24);
         }
     } else {
-        // Read from display buffer (stable during active video)
-        // 320 pixels = 320 bytes. Stride is 320.
-        uint32_t stride = 80; // 320px / 4 pixels per word
+        // Read from VRAM (stable during active video)
+        // Stride comes from CRTC Offset (CR13) which is in words for VGA.
+        // We use 32-bit words for fetch, so convert words->dwords.
+        uint32_t stride = (gfx_line_offset > 0) ? ((uint32_t)gfx_line_offset * 2u) : 80u;
         uint32_t offset;
         if (frame_line_compare >= 0 && src_line >= (uint32_t)frame_line_compare) {
             offset = (src_line - frame_line_compare) * stride;
@@ -658,11 +711,18 @@ static void __time_critical_func(render_line)(uint32_t line, uint32_t *output_bu
         } else if (gfx_submode == 4) {
             // CGA 2-color (640x200 monochrome)
             render_gfx_line_cga2(line, output_buffer);
+        } else if (gfx_submode == 5) {
+            // VGA 256-color planar (Mode X)
+            render_gfx_line_vga_planar256(line, output_buffer);
         } else {
             // VGA 256-color (mode 13h) - default
             render_gfx_line_from_sram(line, output_buffer);
         }
     }
+}
+
+bool __time_critical_func(vga_hw_in_vblank)(void) {
+    return in_vblank;
 }
 
 static void __isr __time_critical_func(dma_handler_vga)(void) {
@@ -676,7 +736,7 @@ static void __isr __time_critical_func(dma_handler_vga)(void) {
     }
     
     in_vblank = (current_line >= N_LINES_VISIBLE);
-    
+
     // Allow copy during entire vblank period
     gfx_copy_allowed = in_vblank;
     

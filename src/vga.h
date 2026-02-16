@@ -52,9 +52,6 @@ bool vga_in_retrace(VGAState *s);        // Check if in vertical retrace
 int vga_get_cursor_blink_phase(VGAState *s);  // Cursor blink phase (1=visible, 0=hidden)
 int vga_get_char_height(VGAState *s);         // Character cell height (typically 8 or 16)
 
-void vga_hw_set_text_cols(int cols);
-void vga_hw_set_text_stride(int stride_cells);
-
 #ifndef BPP
 #define BPP 32
 #endif

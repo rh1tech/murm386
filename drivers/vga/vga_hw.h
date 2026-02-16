@@ -97,3 +97,9 @@ void vga_hw_clear(uint8_t color);
 
 // Set a single pixel (legacy, no-op)
 void vga_hw_set_pixel(int x, int y, uint8_t color);
+
+void vga_hw_set_text_cols(int cols);
+void vga_hw_set_text_stride(int stride_cells);
+
+// True during vertical blank
+bool vga_hw_in_vblank(void);
