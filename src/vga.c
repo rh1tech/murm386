@@ -39,10 +39,12 @@
 #include "esp_attr.h"
 #elif defined(RP2350_BUILD)
 #include "pico/stdlib.h"
+#include "vga_hw.h"
 #define IRAM_ATTR __time_critical_func()
 #else
 #define IRAM_ATTR
 #endif
+
 
 #ifdef BUILD_ESP32
 void *pcmalloc(long size);
@@ -170,7 +172,7 @@ static int after_eq(uint32_t a, uint32_t b)
 }
 
 #if BPP == 32
-static void vga_draw_glyph8(uint8_t *d, int linesize,
+static void __not_in_flash_func(vga_draw_glyph8)(uint8_t *d, int linesize,
                             const uint8_t *font_ptr, int h,
                             uint32_t fgcol, uint32_t bgcol)
 {
@@ -1281,7 +1283,7 @@ void vga_refresh(VGAState *s,
 }
 
 /* force some bits to zero */
-static const uint8_t sr_mask[8] = {
+static const uint8_t sr_mask[8] __not_in_flash("sr_mask") = {
     (uint8_t)~0xfc,
     (uint8_t)~0xc2,
     (uint8_t)~0xf0,
@@ -1292,7 +1294,7 @@ static const uint8_t sr_mask[8] = {
     (uint8_t)~0x00,
 };
 
-static const uint8_t gr_mask[16] = {
+static const uint8_t gr_mask[16] __not_in_flash("gr_mask") = {
     (uint8_t)~0xf0, /* 0x00 */
     (uint8_t)~0xf0, /* 0x01 */
     (uint8_t)~0xf0, /* 0x02 */
@@ -1320,6 +1322,11 @@ uint32_t vga_ioport_read(VGAState *s, uint32_t addr)
      * Update retrace status on each read so tight polling loops see changes. */
     if (addr == 0x3ba || addr == 0x3da) {
         vga_update_retrace(s);
+        // TODO: Use real scan timing from VGA DMA
+//        if (vga_hw_in_vblank())
+//            s->st01 |= (ST01_V_RETRACE | ST01_DISP_ENABLE);
+//        else
+//            s->st01 &= ~(ST01_V_RETRACE | ST01_DISP_ENABLE);
         val = s->st01;
         s->ar_flip_flop = 0;
         goto done;
@@ -1662,7 +1669,7 @@ uint32_t vbe_read(VGAState *s, uint32_t offset)
 #define GET_PLANE(data, p) (((data) >> ((p) * 8)) & 0xff)
 #endif
 
-static const uint32_t mask16[16] = {
+static const uint32_t mask16[16] __not_in_flash("mask16") = {
     PAT(0x00000000),
     PAT(0x000000ff),
     PAT(0x0000ff00),
@@ -2107,7 +2114,7 @@ PCIDevice *vga_pci_init(VGAState *s, PCIBus *bus,
 
 // from vgabios
 // stdvga mode 2
-const static uint8_t pal_ega[] = {
+const static uint8_t pal_ega[] __not_in_flash("pal_ega") = {
     0x00,0x00,0x00, 0x00,0x00,0x2a, 0x00,0x2a,0x00, 0x00,0x2a,0x2a,
     0x2a,0x00,0x00, 0x2a,0x00,0x2a, 0x2a,0x2a,0x00, 0x2a,0x2a,0x2a,
     0x00,0x00,0x15, 0x00,0x00,0x3f, 0x00,0x2a,0x15, 0x00,0x2a,0x3f,
@@ -2126,17 +2133,17 @@ const static uint8_t pal_ega[] = {
     0x3f,0x15,0x15, 0x3f,0x15,0x3f, 0x3f,0x3f,0x15, 0x3f,0x3f,0x3f
 };
 
-const static uint8_t actl[] = {
+const static uint8_t actl[] __not_in_flash("actl") = {
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x14, 0x07,
     0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
     0x0c, 0x00, 0x0f, 0x08 };
 
-const static uint8_t sequ[] = { 0x00, 0x03, 0x00, 0x02 };
+const static uint8_t sequ[] __not_in_flash("sequ") = { 0x00, 0x03, 0x00, 0x02 };
 
-const static uint8_t grdc[] = {
+const static uint8_t grdc[] __not_in_flash("grdc") = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x0e, 0x0f, 0xff };
 
-const static uint8_t crtc[] = {
+const static uint8_t crtc[] __not_in_flash("crtc") = {
     0x5f, 0x4f, 0x50, 0x82, 0x55, 0x81, 0xbf, 0x1f,
     0x00, 0x4f, 0x0d, 0x0e, 0x00, 0x00, 0x00, 0x00,
     0x9c, 0x8e, 0x8f, 0x28, 0x1f, 0x96, 0xb9, 0xa3,
@@ -2595,10 +2602,12 @@ int vga_get_graphics_mode(VGAState *s, int *width, int *height)
     if (height) *height = h;
 
     if (shift_control == 0) {
-        // Check for Mode X (256-color planar)
-        // AR10 bit 6 = 1 means 256-color mode
-        if (s->ar[0x10] & 0x40) {
-            return 3; // Treat as VGA 256-color (linear pixels in vga_ram)
+        // Mode X (320x200 256-color planar, unchained)
+        // Wolf3D and many DOS games use this for page-flipping.
+        // Our VRAM model stores planar bytes as packed-planes dwords.
+        /// TODO: vga_planar_mode = !(vga.sequencer[4] & 8) || !(vga.sequencer[4] & 6);
+        if (!(s->sr[VGA_SEQ_MEMORY_MODE] & 0x04u) && (s->ar[0x10] & 0x40) && w == 320) {
+            return 5; // VGA 256-color planar (Mode X)
         }
         // Debug: print register values for 640-wide modes
         static int debug_640 = 0;
