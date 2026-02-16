@@ -104,14 +104,10 @@ uint8_t text_buffer_sram[80 * 25 * 2] __attribute__((aligned(4)));
 static volatile int update_requested = 0;  // Set by update call
 static volatile int in_vblank = 0;         // Set by IRQ during vblank
 
-// Double-buffered graphics framebuffer in SRAM
 // 112KB supports up to 640x350 EGA (81 words * 350 lines * 4 = 113KB)
-// Mode X (320x400) not supported - would need 128KB
+// TODO: Mode X (320x400) not supported - would need 128KB
 #define GFX_BUFFER_SIZE (112 * 1024)
-static uint8_t gfx_buffer_a[GFX_BUFFER_SIZE] __attribute__((aligned(4)));
-static uint8_t gfx_buffer_b[GFX_BUFFER_SIZE] __attribute__((aligned(4)));
-static uint8_t * volatile gfx_display_buffer = gfx_buffer_a;  // ISR reads from this
-static uint8_t *gfx_write_buffer = gfx_buffer_b;    // Main loop writes to this
+static uint8_t gfx_buffer[GFX_BUFFER_SIZE] __attribute__((aligned(4)));
 static volatile int gfx_write_done = 0;  // Set when write buffer has new frame
 static volatile int gfx_copy_allowed = 0;  // Set during vblank to allow copy
 
@@ -123,12 +119,9 @@ static uint16_t txt_palette_fast[256 * 4];
 
 // Graphics palette (256 entries) - 16-bit dithered format
 // Each entry: low byte = c_hi (conv0), high byte = c_lo (conv1)
-// Double buffered to avoid race conditions with ISR
+// even - A, odd - B
 static uint16_t palette_a[256];
 static uint16_t palette_b[256];
-static uint16_t * volatile active_palette = palette_a; // Used by ISR
-static uint16_t *pending_palette = palette_b;          // Used by update function
-static volatile bool palette_dirty = false;
 
 // 16-color EGA palette (for 16-color modes) - 8-bit VGA format with sync bits
 static uint8_t ega_palette[16];
@@ -190,7 +183,7 @@ static uint8_t vga_color_to_output(uint8_t r6, uint8_t g6, uint8_t b6) {
 // Convert 6-bit VGA DAC values to 16-bit dithered output
 // Returns: low byte = c_hi (conv0), high byte = c_lo (conv1)
 // When output as 16-bit, adjacent pixels get different colors for spatial dithering
-static uint16_t vga_color_to_dithered(uint8_t r6, uint8_t g6, uint8_t b6) {
+static void vga_color_to_dithered(uint8_t r6, uint8_t g6, uint8_t b6, uint32_t idx) {
     // Convert 6-bit (0-63) to 3-bit (0-7) for dither table lookup
     // 63/7 ≈ 9, so divide by 9
     uint8_t r = r6 / 9;
@@ -203,7 +196,8 @@ static uint16_t vga_color_to_dithered(uint8_t r6, uint8_t g6, uint8_t b6) {
     uint8_t c_hi = TMPL_LINE | (conv0[r] << 4) | (conv0[g] << 2) | conv0[b];
     uint8_t c_lo = TMPL_LINE | (conv1[r] << 4) | (conv1[g] << 2) | conv1[b];
 
-    return (uint16_t)c_hi | ((uint16_t)c_lo << 8);
+    palette_a[idx] = (uint16_t)c_hi | ((uint16_t)c_lo << 8);
+    palette_b[idx] = (uint16_t)c_lo | ((uint16_t)c_hi << 8);
 }
 
 static void init_palettes(void) {
@@ -251,10 +245,8 @@ static void init_palettes(void) {
     }
     
     // Initialize 256-color dithered palette with black (will be overwritten by emulator)
-    uint16_t black_dithered = vga_color_to_dithered(0, 0, 0);
     for (int i = 0; i < 256; i++) {
-        palette_a[i] = black_dithered;
-        palette_b[i] = black_dithered;
+        vga_color_to_dithered(0, 0, 0, i);
     }
     
     // Initialize CGA 4-color palette (palette 1 high intensity: black, cyan, magenta, white)
@@ -297,11 +289,12 @@ static void __time_critical_func(render_gfx_line_from_sram)(uint32_t line, uint3
     } else {
         // Read from display buffer (stable during active video)
         // 320 pixels = 320 bytes. Stride is 320.
-        const uint32_t *src32 = (const uint32_t *)(gfx_display_buffer + (src_line * 320));
+        const uint32_t *src32 = (const uint32_t *)(gfx_buffer + (src_line * 320));
 
         // Each pixel outputs 16 bits (2 bytes) of dithered color
         // Low byte = c_hi (conv0), high byte = c_lo (conv1)
         // This creates spatial dithering for ~2197 perceived colors
+        uint16_t * active_palette = src_line & 1 ? palette_a : palette_b;
         for (int i = 0; i < 80; i++) {
             uint32_t pixels = src32[i];
             uint16_t p0 = active_palette[pixels & 0xFF];
@@ -335,7 +328,7 @@ static void __time_critical_func(render_gfx_line_cga)(uint32_t line, uint32_t *o
         uint32_t cga_row = src_line >> 1;  // Which row within bank (0-99)
         uint32_t cga_line_offset = cga_bank + cga_row * 80;
 
-        const uint8_t *src = gfx_display_buffer;
+        const uint8_t *src = gfx_buffer;
 
         // In CGA/odd-even mode, data is stored linearly in planes 0 and 1
         // Even bytes go to plane 0, odd bytes go to plane 1
@@ -386,7 +379,7 @@ static void __time_critical_func(render_gfx_line_cga2)(uint32_t line, uint32_t *
         // In planar layout: multiply by 4 to get actual byte offset
         uint32_t base_addr = (bank_offset + row_in_bank * 80) * 4;
 
-        const uint8_t *src = gfx_display_buffer;
+        const uint8_t *src = gfx_buffer;
 
         // CGA 2-color palette: 0 = black, 1 = white (or foreground color)
         uint8_t bg = cga_palette[0];  // Background (black)
@@ -479,7 +472,7 @@ static void __time_critical_func(render_gfx_line_ega)(uint32_t line, uint32_t *o
     }
 
     // Snapshot display buffer pointer
-    const uint8_t *disp_buf = gfx_display_buffer;
+    const uint8_t *disp_buf = gfx_buffer;
 
     // Read from display buffer (stable during active video)
     // Use calculated stride
@@ -633,25 +626,9 @@ static void __isr __time_critical_func(dma_handler_vga)(void) {
             current_mode = pending_mode;
             pending_mode = -1;
         }
-
+        
         if (gfx_write_done) {
-            // Only update frame parameters when we actually swap the buffer!
-            // This ensures panning and line_compare match the frame content.
-            frame_pixel_panning = pixel_panning;
-            frame_line_compare = line_compare;
-
-            uint8_t *tmp = gfx_display_buffer;
-            gfx_display_buffer = gfx_write_buffer;
-            gfx_write_buffer = tmp;
             gfx_write_done = 0;
-        }
-
-        // Swap palette if dirty
-        if (palette_dirty) {
-            uint16_t *tmp = active_palette;
-            active_palette = pending_palette;
-            pending_palette = tmp;
-            palette_dirty = false;
         }
     }
     
@@ -885,9 +862,8 @@ void vga_hw_set_palette(const uint8_t *palette_data) {
         uint8_t r6 = palette_data[i * 3 + 0];
         uint8_t g6 = palette_data[i * 3 + 1];
         uint8_t b6 = palette_data[i * 3 + 2];
-        pending_palette[i] = vga_color_to_dithered(r6, g6, b6);
+        vga_color_to_dithered(r6, g6, b6, i);
     }
-    palette_dirty = true;
 }
 
 // Update EGA 16-color palette from AC palette registers
@@ -973,7 +949,7 @@ void vga_hw_update(void) {
             int split_line = line_compare;
             
             const uint32_t *src = (const uint32_t *)vga_ram_psram;
-            uint32_t *dst = (uint32_t *)gfx_write_buffer;
+            uint32_t *dst = (uint32_t *)gfx_buffer;
             
             if (gfx_submode == 1 || gfx_submode == 4) {
                 // CGA 4-color or 2-color: copy 32KB (same memory layout)
