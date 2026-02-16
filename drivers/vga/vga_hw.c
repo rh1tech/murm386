@@ -576,6 +576,17 @@ void vga_hw_set_text_stride(int stride_cells) {
         text_stride_cells = stride_cells;
 }
 
+// 80 cols: one uint16 = 2 pixels (left in low byte, right in high byte)
+// 40 cols: need true 2x horizontal scaling per pixel: A B -> A A B B
+static inline void __time_critical_func(out16_2x_per_pixel)(uint16_t **pp, uint16_t v) {
+    uint16_t *p = *pp;
+    uint8_t a = (uint8_t)(v & 0xFF);
+    uint8_t b = (uint8_t)(v >> 8);
+    *p++ = (uint16_t)a | ((uint16_t)a << 8);  // A A
+    *p++ = (uint16_t)b | ((uint16_t)b << 8);  // B B
+    *pp = p;
+}
+
 // Helper function to render a single text line
 static void __time_critical_func(render_text_line)(uint32_t line, uint32_t *output_buffer) {
     uint16_t *out16 = (uint16_t *)output_buffer + SHIFT_PICTURE / 2;
@@ -584,7 +595,7 @@ static void __time_critical_func(render_text_line)(uint32_t line, uint32_t *outp
     uint32_t glyph_line = line & 15;
 
     int cols = text_cols;
-    int double_h = (cols == 40);
+    int double_h = (cols == 40);  // 40 columns => 2x horizontal scaling
 
     if (char_row < 25) {
         // Use snapped start address for the frame (prevents mid-frame tearing).
@@ -607,11 +618,18 @@ static void __time_critical_func(render_text_line)(uint32_t line, uint32_t *outp
 
             // 8px glyph -> 4x uint16 (каждый uint16 = 2 пикселя)
             uint16_t v;
-
-            v = pal[glyph & 3];           *out16++ = v; if (double_h) *out16++ = v;
-            v = pal[(glyph >> 2) & 3];    *out16++ = v; if (double_h) *out16++ = v;
-            v = pal[(glyph >> 4) & 3];    *out16++ = v; if (double_h) *out16++ = v;
-            v = pal[(glyph >> 6) & 3];    *out16++ = v; if (double_h) *out16++ = v;
+            if (!double_h) {
+                v = pal[glyph & 3];           *out16++ = v;
+                v = pal[(glyph >> 2) & 3];    *out16++ = v;
+                v = pal[(glyph >> 4) & 3];    *out16++ = v;
+                v = pal[(glyph >> 6) & 3];    *out16++ = v;
+            } else {
+                // true per-pixel doubling: (A,B) -> (A,A,B,B)
+                v = pal[glyph & 3];           out16_2x_per_pixel(&out16, v);
+                v = pal[(glyph >> 2) & 3];    out16_2x_per_pixel(&out16, v);
+                v = pal[(glyph >> 4) & 3];    out16_2x_per_pixel(&out16, v);
+                v = pal[(glyph >> 6) & 3];    out16_2x_per_pixel(&out16, v);
+            }
         }
     }
 }
