@@ -194,10 +194,14 @@ static uword sext16(u16 a)
 }
 #endif
 
-static uword sext32(u32 a)
+inline static uword sext32(u32 a)
 {
 	return (sword) (s32) a;
 }
+
+#if EMULATE_LTEMS
+#include "ems.c.inl"
+#endif
 
 #ifdef I386_OPT1
 /* only works on hosts that are little-endian and support unaligned access */
@@ -205,31 +209,61 @@ static uword sext32(u32 a)
 /* ARM Cortex-M33 optimized versions using inline assembly macros */
 static inline u8 pload8(CPUI386 *cpu, uword addr)
 {
+#if EMULATE_LTEMS
+	if (__builtin_expect(addr - EMS_START < (EMS_END - EMS_START), 0)) {
+		return ems_read(addr - EMS_START);
+	}
+#endif
 	return PLOAD8_INLINE(cpu->phys_mem, addr);
 }
 
 static inline u16 pload16(CPUI386 *cpu, uword addr)
 {
+#if EMULATE_LTEMS
+	if (__builtin_expect(addr - EMS_START < (EMS_END - EMS_START), 0)) {
+		return ems_readw(addr - EMS_START);
+	}
+#endif
 	return PLOAD16_INLINE(cpu->phys_mem, addr);
 }
 
 static inline u32 pload32(CPUI386 *cpu, uword addr)
 {
+#if EMULATE_LTEMS
+	if (__builtin_expect(addr - EMS_START < (EMS_END - EMS_START), 0)) {
+		return ems_readdw(addr - EMS_START);
+	}
+#endif
 	return PLOAD32_INLINE(cpu->phys_mem, addr);
 }
 
 static inline void pstore8(CPUI386 *cpu, uword addr, u8 val)
 {
+#if EMULATE_LTEMS
+	if (__builtin_expect(addr - EMS_START < (EMS_END - EMS_START), 0)) {
+		return ems_write(addr - EMS_START, val);
+	}
+#endif
 	PSTORE8_INLINE(cpu->phys_mem, addr, val);
 }
 
 static inline void pstore16(CPUI386 *cpu, uword addr, u16 val)
 {
+#if EMULATE_LTEMS
+	if (__builtin_expect(addr - EMS_START < (EMS_END - EMS_START), 0)) {
+		return ems_writew(addr - EMS_START, val);
+	}
+#endif
 	PSTORE16_INLINE(cpu->phys_mem, addr, val);
 }
 
 static inline void pstore32(CPUI386 *cpu, uword addr, u32 val)
 {
+#if EMULATE_LTEMS
+	if (__builtin_expect(addr - EMS_START < (EMS_END - EMS_START), 0)) {
+		return ems_writedw(addr - EMS_START, val);
+	}
+#endif
 	PSTORE32_INLINE(cpu->phys_mem, addr, val);
 }
 #else
