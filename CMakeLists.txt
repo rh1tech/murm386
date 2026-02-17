@@ -254,9 +254,11 @@ target_compile_definitions(murm386 PRIVATE
     RP2350_BUILD=1
 
     # Emulator configuration (7MB max to fit in 8MB PSRAM with VGA memory)
-    EMU_MEM_SIZE_MB=7
+    EMU_MEM_SIZE_MB=6
     EMU_VGA_MEM_SIZE_KB=256
     EMU_CPU_GEN=4
+
+    EMULATE_LTEMS=1
 
     # Disable features for initial port
     NO_FPU=1
@@ -318,7 +320,7 @@ target_link_libraries(murm386
 if(USB_HID_ENABLED)
     message(STATUS "USB HID enabled: Using UART for stdio (USB is Host mode for keyboard)")
     pico_enable_stdio_usb(murm386 0)
-    pico_enable_stdio_uart(murm386 1)
+    pico_enable_stdio_uart(murm386 0)
 else()
     # USB Serial console (when USB HID is disabled)
     pico_enable_stdio_usb(murm386 1)

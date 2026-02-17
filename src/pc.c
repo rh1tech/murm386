@@ -205,6 +205,12 @@ static int pc_io_read_string(void *o, int addr, uint8_t *buf, int size, int coun
 	return 0;
 }
 
+uint8_t ems_pages[4] = {0};
+
+inline static void out_ems(const uint16_t port, const uint8_t data) {
+    ems_pages[port & 3] = data;
+}
+
 static void pc_io_write(void *o, int addr, u8 val)
 {
 	PC *pc = o;
@@ -219,6 +225,9 @@ static void pc_io_write(void *o, int addr, u8 val)
 	case 0x3fc: case 0x3fd: case 0x3fe: case 0x3ff:
 		u8250_reg_write(pc->serial, addr - 0x3f8, val);
 		return;
+    case 0x260: case 0x261: case 0x262: case 0x263:
+		out_ems(addr, val);
+        return;
 	case 0x2f8: case 0x2f9: case 0x2fa: case 0x2fb:
 	case 0x2fc: case 0x2fd: case 0x2fe: case 0x2ff:
 	case 0x2e8: case 0x2e9: case 0x2ea: case 0x2eb:
@@ -334,7 +343,7 @@ static void pc_io_write(void *o, int addr, u8 val)
 	case 0xf1f4:
 		return;
 	default:
-		fprintf(stderr, "out 0x%x => 0x%x\n", val, addr);
+///		fprintf(stderr, "out 0x%x => 0x%x\n", val, addr);
 		return;
 	}
 }
@@ -346,6 +355,10 @@ static void pc_io_write16(void *o, int addr, u16 val)
 	/* IDE ports removed - using INT 13h disk handler instead */
 	case 0x1f0: case 0x170:
 		return;
+    case 0x260: case 0x261: case 0x262: case 0x263:
+		pc_io_write(o, addr, (uint8_t) val);
+		pc_io_write(o, addr + 1, val >> 8);
+        return;
 	case 0x3c0: case 0x3c1: case 0x3c2: case 0x3c3:
 	case 0x3c4: case 0x3c5: case 0x3c6: case 0x3c7:
 	case 0x3c8: case 0x3c9: case 0x3ca: case 0x3cb:
@@ -367,7 +380,7 @@ static void pc_io_write16(void *o, int addr, u16 val)
 	case 0x310:
 		return;
 	default:
-		fprintf(stderr, "outw 0x%x => 0x%x\n", val, addr);
+///		fprintf(stderr, "outw 0x%x => 0x%x\n", val, addr);
 		return;
 	}
 }
@@ -388,8 +401,12 @@ static void pc_io_write32(void *o, int addr, u32 val)
 	/* Emulink removed - using INT 13h disk handler instead */
 	case 0xf1f0: case 0xf1f4:
 		return;
+    case 0x260: case 0x261: case 0x262: case 0x263:
+		pc_io_write16(o, addr, (uint16_t) val);
+		pc_io_write16(o, addr + 2, val >> 16);
+        return;
 	default:
-		fprintf(stderr, "outd 0x%x => 0x%x\n", val, addr);
+///		do_log(stderr, "outd 0x%x => 0x%x\n", val, addr);
 		return;
 	}
 }
