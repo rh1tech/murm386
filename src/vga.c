@@ -1207,12 +1207,8 @@ uint32_t vga_ioport_read(VGAState *s, uint32_t addr)
      * Some games (like Goblins) poll 0x3BA for vertical retrace even in color mode.
      * Update retrace status on each read so tight polling loops see changes. */
     if (addr == 0x3ba || addr == 0x3da) {
-        vga_update_retrace(s);
-        // TODO: Use real scan timing from VGA DMA
-//        if (vga_hw_in_vblank())
-//            s->st01 |= (ST01_V_RETRACE | ST01_DISP_ENABLE);
-//        else
-//            s->st01 &= ~(ST01_V_RETRACE | ST01_DISP_ENABLE);
+        /* st01 is updated by the VGA ISR on every scanline — just return it.
+         * Wolf3D polling this port sees exact hardware vblank timing. */
         val = s->st01;
         s->ar_flip_flop = 0;
         goto done;
@@ -1411,13 +1407,9 @@ void vga_ioport_write(VGAState *s, uint32_t addr, uint32_t val)
         case 0x01: /* horizontal display end */
         case 0x07:
         case 0x09:
-        case 0x12: /* vertical display end */
-            s->cr[s->cr_index] = val;
-            break;
         case 0x0c: /* start address high */
         case 0x0d: /* start address low */
-            s->cr[s->cr_index] = val;
-            break;
+        case 0x12: /* vertical display end */
         default:
             s->cr[s->cr_index] = val;
             break;
