@@ -140,6 +140,15 @@ static u8 pc_io_read(void *o, int addr)
 		 * Bits 3-0: axes timeout (0 = timed out, no joystick)
 		 * Return 0xF0 to indicate axes have timed out (no joystick present) */
 		return 0xf0;
+	/* LPT data ports (Covox): write-only DAC, reads return 0xFF */
+	case 0x378: case 0x278:
+		return 0xff;
+	/* LPT status ports: bit7=nBusy(1=ready), bits6..3=1 (idle/ready) */
+	case 0x379: case 0x279:
+		return 0xf8;
+	/* LPT control ports */
+	case 0x37a: case 0x27a:
+		return 0x04;
 	default:
 		//fprintf(stderr, "in 0x%x <= 0x%x\n", addr, 0xff);
 		return 0xff;
@@ -365,8 +374,16 @@ static void pc_io_write(void *o, int addr, u8 val)
 		if (pc->sn76489 && pc->tandy_enabled)
 			sn76489_write(pc->sn76489, val);
 		return;
-	/* Emulink removed - using INT 13h disk handler instead */
-	case 0xf1f4:
+	/* Covox Speech Thing (parallel port DAC)
+	 * 0x378 = LPT1 data, 0x278 = LPT2 data.
+	 * Both mapped: software uses either depending on which LPT Covox is on. */
+	case 0x378: case 0x278:
+		if (pc->covox_enabled)
+			pc->covox_sample = (int16_t)((val - 128) << 6);
+		return;
+	/* LPT status/control ports are read-only - writes ignored */
+	case 0x379: case 0x279:
+	case 0x37a: case 0x27a:
 		return;
 	default:
 ///		fprintf(stderr, "out 0x%x => 0x%x\n", val, addr);
@@ -767,6 +784,8 @@ PC *pc_new(SimpleFBDrawFunc *redraw, void (*poll)(void *), void *redraw_data,
 	pc->sb16_enabled = 1;
 	pc->pcspk_enabled = 1;
 	pc->tandy_enabled = 1;
+	pc->covox_enabled = 1;
+	pc->covox_sample  = 0;
 	pc->mouse_enabled = 1;
 
 	pc->port92 = 0x2;
@@ -789,7 +808,7 @@ void mixer_callback (void *opaque, uint8_t *stream, int free)
 
 	// Early exit if all audio disabled - major performance optimization
 	if (!pc->adlib_enabled && !pc->sb16_enabled && !pc->pcspk_enabled &&
-	    !pc->tandy_enabled) {
+	    !pc->tandy_enabled && !pc->covox_enabled) {
 		memset(stream, 0, free);
 		return;
 	}
@@ -842,6 +861,17 @@ void mixer_callback (void *opaque, uint8_t *stream, int free)
 		int16_t *tandy = (int16_t *)tmpbuf;
 		for (int i = 0; i < tandy_len / 2; i++) {
 			int res = (int)d2[i] + (int)tandy[i];
+			if (res > 32767)  res = 32767;
+			if (res < -32768) res = -32768;
+			d2[i] = (int16_t)res;
+		}
+	}
+
+	// Covox Speech Thing - sample-and-hold DAC on LPT port (only if enabled)
+	if (pc->covox_enabled && pc->covox_sample != 0) {
+		int16_t cv = pc->covox_sample;
+		for (int i = 0; i < free / 2; i++) {
+			int res = (int)d2[i] + (int)cv;
 			if (res > 32767)  res = 32767;
 			if (res < -32768) res = -32768;
 			d2[i] = (int16_t)res;

@@ -60,11 +60,15 @@ typedef struct {
 	PCSpkState *pcspk;
 	SN76489State *sn76489;
 
+	// Covox Speech Thing - no state object needed, just last sample + enable
+	int16_t covox_sample;      /* last written DAC value, centered at 0      */
+
 	// Runtime enable flags for audio devices (checked in mixer_callback)
 	int adlib_enabled;
 	int sb16_enabled;
 	int pcspk_enabled;
 	int tandy_enabled;
+	int covox_enabled;
 	int mouse_enabled;
 
 	I440FXState *i440fx;
