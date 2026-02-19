@@ -143,13 +143,15 @@ static int cursor_x = 0, cursor_y = 0;
 static int cursor_start = 0, cursor_end = 15;
 static int cursor_blink_state = 1;
 
-// VRAM offset for scrolling (set by emulator, copied to frame_vram_offset during vblank)
-static uint16_t vram_offset = 0;
-static uint16_t frame_vram_offset = 0;  // Snapshotted at start of frame for consistent rendering
-static uint8_t pixel_panning = 0;       // Horizontal pixel panning (0-7)
-static uint8_t frame_pixel_panning = 0; // Snapshotted at start of frame
-static int line_compare = -1;           // Line Compare register (-1 = disabled/off-screen)
-static int frame_line_compare = -1;     // Snapshotted at start of frame
+// Direct pointer to emulator VGA register state.
+// Set once by core0 after vga_init(). ISR reads cr[] directly at vblank
+// — no intermediate copies, no synchronisation lag.
+static VGAState *vga_state = NULL;
+
+// Per-frame snapshots computed by ISR at vblank from vga_state->cr[]
+static uint16_t frame_vram_offset = 0;
+static uint8_t  frame_pixel_panning = 0;
+static int      frame_line_compare = -1;
 
 // Debug counters
 static volatile uint32_t gfx_fallback_count = 0;
@@ -874,32 +876,26 @@ static void __isr __time_critical_func(dma_handler_vga)(void) {
     }
     
     in_vblank = (current_line >= N_LINES_VISIBLE);
-
-    // Allow copy during entire vblank period
     gfx_copy_allowed = in_vblank;
-    
-    // At start of vblank (end of active video), swap buffers if write is done
-    if (current_line == N_LINES_VISIBLE) {
-        frame_vram_offset = vram_offset;
-        frame_line_compare = line_compare;
-        frame_pixel_panning = pixel_panning;        
 
+    // At start of vblank: apply pending mode/geometry changes.
+    // Do NOT latch vram_offset yet — Wolf3D writes CRTC start address
+    // during vblank, after this point.
+    if (current_line == N_LINES_VISIBLE) {
         if (text_geom_pending) {
             text_cols = pending_text_cols;
             text_stride_cells = pending_text_stride;
             text_geom_pending = 0;
         }
-        // Apply pending mode change during vblank (safe time to switch)
         if (pending_mode >= 0) {
             current_mode = pending_mode;
             pending_mode = -1;
         }
-        
         if (gfx_write_done) {
             gfx_write_done = 0;
         }
     }
-    
+
     // Vertical blanking region
     if (current_line >= N_LINES_VISIBLE) {
         if (current_line >= LINE_VS_BEGIN && current_line <= LINE_VS_END) {
@@ -907,9 +903,24 @@ static void __isr __time_critical_func(dma_handler_vga)(void) {
         } else {
             dma_channel_set_read_addr(dma_ctrl_chan, &lines_pattern[0], false);
         }
-        
-        // Pre-render first few lines late in vblank (buffers already swapped)
+
+        // Late in vblank: latch frame parameters directly from VGA registers.
+        // By this point Wolf3D has written the new CRTC start address.
+        // Reading cr[] here is safe — core0 won't write to the same address
+        // twice within one scanline period (~32µs).
         if (current_line == N_LINES_TOTAL - 4) {
+            if (vga_state) {
+                const uint8_t *cr = vga_state->cr;
+                // Start address (words)
+                frame_vram_offset = (uint16_t)((cr[0x0c] << 8) | cr[0x0d]);
+                // Pixel panning from AR register 0x13 bits 3:0
+                frame_pixel_panning = vga_state->ar[0x13] & 0x07;
+                // Line compare: CR18 | bit4 of CR07 << 8 | bit6 of CR09 << 9
+                int lc = cr[0x18]
+                       | ((cr[0x07] & 0x10) << 4)
+                       | ((cr[0x09] & 0x40) << 3);
+                frame_line_compare = (lc < N_LINES_VISIBLE) ? lc : -1;
+            }
             render_line(0, lines_pattern[2]);
             render_line(1, lines_pattern[3]);
             render_line(2, lines_pattern[4]);
@@ -1088,16 +1099,14 @@ void vga_hw_set_cursor_blink(int blink_phase) {
     cursor_blink_state = blink_phase;
 }
 
-void vga_hw_set_vram_offset(uint16_t offset) {
-    vram_offset = offset;
-}
+// The old per-field setters are no longer needed: the ISR reads VGA
+// registers directly from vga_state. Keep stubs so callers compile.
+void vga_hw_set_vram_offset(uint16_t offset) { (void)offset; }
+void vga_hw_set_panning(uint8_t panning)      { (void)panning; }
+void vga_hw_set_line_compare(int line)         { (void)line; }
 
-void vga_hw_set_panning(uint8_t panning) {
-    pixel_panning = panning & 7;
-}
-
-void vga_hw_set_line_compare(int line) {
-    line_compare = line;
+void vga_hw_set_vga_state(VGAState *s) {
+    vga_state = s;
 }
 
 // Update palette from emulator's 6-bit VGA DAC values

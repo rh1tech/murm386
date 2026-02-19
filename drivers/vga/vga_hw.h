@@ -98,3 +98,9 @@ void vga_hw_set_pixel(int x, int y, uint8_t color);
 bool vga_hw_in_vblank(void);
 
 void vga_hw_submit_text_geom(int cols, int stride_cells);
+
+// Give ISR direct read-only access to VGA register state.
+// Call once after vga_init(). The ISR reads cr[], ar[], gr[] directly
+// at the exact moment it needs them — no intermediate volatile copies.
+#include "../../src/vga.h"
+void vga_hw_set_vga_state(VGAState *s);
