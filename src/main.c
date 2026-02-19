@@ -782,6 +782,10 @@ static bool init_emulator(void) {
         return false;
     }
 
+    // Give ISR direct access to VGA register state so it can read
+    // cr[], ar[] at exactly the right moment without intermediate copies.
+    vga_hw_set_vga_state(pc->vga);
+
     // Ensure emulator starts unpaused
     pc->paused = 0;
 
