@@ -49,6 +49,9 @@ void config_set_soundblaster(int enabled);
 int config_get_tandy(void);
 void config_set_tandy(int enabled);
 
+int config_get_covox(void);
+void config_set_covox(int enabled);
+
 int config_get_mouse(void);
 void config_set_mouse(int enabled);
 
