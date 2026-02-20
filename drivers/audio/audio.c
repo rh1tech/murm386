@@ -323,12 +323,9 @@ static int startup_frame_counter = 0;
 // Mixed stereo buffer (16-bit stereo samples)
 static int16_t __attribute__((aligned(4))) mixed_buffer[AUDIO_BUFFER_SAMPLES * 2];
 
-// Anti-click filter: track last sample values for smooth transitions
+// Track last sample for single-point frame-boundary interpolation
 static int16_t last_sample_l = 0;
 static int16_t last_sample_r = 0;
-
-// Anti-click fade length (samples) - short fade to prevent clicks
-#define ANTICLICK_FADE_SAMPLES 32
 
 // Target samples per frame
 // 44100 / 60 = 735 samples at 60Hz
@@ -443,31 +440,14 @@ void audio_process_frame(void *pc) {
         mixer_callback(pc, (uint8_t *)mixed_buffer, TARGET_SAMPLES_PER_FRAME * 4);
     }
 
-    // Anti-click filter: smooth discontinuities at buffer boundaries
-    // Check if there's a large jump from last frame's ending to this frame's start
-    int16_t first_l = mixed_buffer[0];
-    int16_t first_r = mixed_buffer[1];
-    int diff_l = first_l - last_sample_l;
-    int diff_r = first_r - last_sample_r;
-
-    // Apply fade-in from last sample if there's a discontinuity
-    // This creates a smooth transition over ANTICLICK_FADE_SAMPLES
-    if (diff_l != 0 || diff_r != 0) {
-        for (int i = 0; i < ANTICLICK_FADE_SAMPLES && i < TARGET_SAMPLES_PER_FRAME; i++) {
-            // Linear interpolation from last_sample to current sample
-            int fade_in = i;
-            int fade_out = ANTICLICK_FADE_SAMPLES - i;
-
-            int idx_l = i * 2;
-            int idx_r = i * 2 + 1;
-
-            // Blend: (last_sample * fade_out + current_sample * fade_in) / ANTICLICK_FADE_SAMPLES
-            int blended_l = (last_sample_l * fade_out + mixed_buffer[idx_l] * fade_in) / ANTICLICK_FADE_SAMPLES;
-            int blended_r = (last_sample_r * fade_out + mixed_buffer[idx_r] * fade_in) / ANTICLICK_FADE_SAMPLES;
-
-            mixed_buffer[idx_l] = (int16_t)blended_l;
-            mixed_buffer[idx_r] = (int16_t)blended_r;
-        }
+    // Anti-click: single midpoint sample at frame boundary only.
+    // A 32-sample fade destroys Tandy/PCSpk square waves (60Hz amplitude
+    // modulation) and smears DSS transients (fake echo). SB16/Adlib don't
+    // need it - their PCM is already smooth across frame boundaries.
+    // One interpolated sample is enough to kill the DC-offset click.
+    if (mixed_buffer[0] != last_sample_l || mixed_buffer[1] != last_sample_r) {
+        mixed_buffer[0] = (int16_t)((last_sample_l + mixed_buffer[0]) >> 1);
+        mixed_buffer[1] = (int16_t)((last_sample_r + mixed_buffer[1]) >> 1);
     }
 
     // Store last samples for next frame's anti-click processing
