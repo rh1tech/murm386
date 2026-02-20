@@ -198,7 +198,7 @@ set(EMU_CORE_SOURCES
     src/pcspk.c      # PC Speaker
     src/fmopl.c      # FM OPL synthesis engine
     src/sn76489.c    # Tandy 3-Voice Sound (SN76489)
-    src/dss.c        # Dandy Sound Source
+    src/dss.c        # Disney Sound Source
 
     # Optional devices (can be disabled for size)
     # src/fpu.c      # FPU emulation - disabled for initial port
