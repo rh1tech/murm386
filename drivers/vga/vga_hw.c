@@ -56,11 +56,13 @@ static const struct pio_program pio_vga_program = {
 #define LINE_VS_BEGIN   490
 #define LINE_VS_END     491
 
-/// for 640*400
-#define TOP_BORDER    40
-#define BOTTOM_BORDER 40
-#define ACTIVE_START  TOP_BORDER
-#define ACTIVE_END    (TOP_BORDER + 400)   // 440
+// Default active area for 400-line modes (text, CGA, EGA ≤400, mode 13h)
+#define DEFAULT_ACTIVE_START  40
+#define DEFAULT_ACTIVE_END    (DEFAULT_ACTIVE_START + 400)  // 440
+
+// Dynamic active area — adjusted by vga_hw_set_gfx_mode() for 480-line modes
+static int active_start = DEFAULT_ACTIVE_START;
+static int active_end   = DEFAULT_ACTIVE_END;
 
 #define HS_SIZE             96
 #define SHIFT_PICTURE       VGA_SHIFT_PICTURE  // Where active video starts (from board_config.h)
@@ -284,7 +286,8 @@ static void init_palettes(void) {
 static void __time_critical_func(render_gfx_line_vga_planar256)(uint32_t line, uint32_t *output_buffer) {
     uint32_t *out32 = (uint32_t *)((uint8_t *)output_buffer + SHIFT_PICTURE);
 
-    uint32_t src_line = (gfx_height > 200) ? line : (line >> 1);
+    int active_lines = active_end - active_start;
+    uint32_t src_line = (gfx_height * 2 <= active_lines) ? (line >> 1) : line;
     if (src_line >= (uint32_t)gfx_height) {
         uint32_t blank = TMPL_LINE | (TMPL_LINE << 8) | (TMPL_LINE << 16) | (TMPL_LINE << 24);
         for (int i = 0; i < 160; i++) out32[i] = blank;
@@ -298,8 +301,8 @@ static void __time_critical_func(render_gfx_line_vga_planar256)(uint32_t line, u
     // frame_line_compare is in display-line units (same as `line` parameter).
     // Compare against `line` (not src_line) to get the right split point.
     if (frame_line_compare >= 0 && (int)line >= frame_line_compare) {
-        uint32_t lc_src = (gfx_height > 200) ? (uint32_t)frame_line_compare
-                                               : (uint32_t)frame_line_compare >> 1;
+        uint32_t lc_src = (gfx_height * 2 <= active_lines) ? (uint32_t)frame_line_compare >> 1
+                                                           : (uint32_t)frame_line_compare;
         base = (src_line - lc_src) * stride;
     } else {
         base = frame_vram_offset + src_line * stride;
@@ -535,9 +538,10 @@ static void __time_critical_func(render_gfx_line_ega)(uint32_t line, uint32_t *o
         // 200-line mode: double vertically (400/2 = 200)
         src_line = line >> 1;
     } else if (height <= 350) {
-        // 350-line mode: map 400 display lines to 350 source lines
+        // 350-line mode: map active display lines to 350 source lines
         // Scale: src = line * 350 / 400 = line * 7 / 8
-        src_line = (line * height) / N_LINES_VISIBLE;
+        int ega_active_lines = active_end - active_start;
+        src_line = (line * height) / ega_active_lines;
     } else {
         // 400-line mode: 1:1 mapping
         src_line = line;
@@ -825,7 +829,7 @@ static void __time_critical_func(render_line)(uint32_t line, uint32_t *output_bu
 
 
     // --- Верхнее поле ---
-    if (line < ACTIVE_START) {
+    if (line < (uint32_t)active_start) {
         uint32_t blank = TMPL_LINE | (TMPL_LINE<<8) | (TMPL_LINE<<16) | (TMPL_LINE<<24);
         uint32_t *out32 = (uint32_t *)((uint8_t *)output_buffer + SHIFT_PICTURE);
         for (int i = 0; i < 160; i++)
@@ -834,7 +838,7 @@ static void __time_critical_func(render_line)(uint32_t line, uint32_t *output_bu
     }
 
     // --- Нижнее поле ---
-    if (line >= ACTIVE_END) {
+    if (line >= (uint32_t)active_end) {
         uint32_t blank = TMPL_LINE | (TMPL_LINE<<8) | (TMPL_LINE<<16) | (TMPL_LINE<<24);
         uint32_t *out32 = (uint32_t *)((uint8_t *)output_buffer + SHIFT_PICTURE);
         for (int i = 0; i < 160; i++)
@@ -843,7 +847,7 @@ static void __time_critical_func(render_line)(uint32_t line, uint32_t *output_bu
     }
 
     // --- Активная зона 640×400 ---
-    line -= ACTIVE_START;
+    line -= active_start;
     // If OSD is visible, it takes over the display completely
     // (it reuses text_buffer_sram so we can't render normal text)
     if (osd_is_visible()) {
@@ -1145,6 +1149,10 @@ static inline void vga_hw_set_mode(int mode) {
     // The render_line() fallback already outputs a valid blank scanline
     // for current_mode==0 so the monitor signal stays clean.
     if (mode == 0) return;
+    if (mode == 1) {
+        active_start = DEFAULT_ACTIVE_START;
+        active_end = DEFAULT_ACTIVE_END;
+    }
     // Update visual debug: mode in high nibble, keep submode in low nibble
     vdbg_mode_sub = (uint8_t)((mode << 4) | (vdbg_mode_sub & 0xF));
     if (mode != current_mode) {
@@ -1212,6 +1220,16 @@ void __time_critical_func(vga_hw_set_gfx_mode)(int submode, int width, int heigh
     gfx_height = height;
     gfx_line_offset = line_offset > 0 ? line_offset : (width / 8);
     gfx_sram_stride = (width / 8) + 1;
+
+    // Adjust active display area based on mode requirements
+    if (height > 400 || (submode == 5 && height > 200)) {
+        // 480-line modes: mode 12h (height=480) or Mode X 320×240 (height=240, doubled)
+        active_start = 0;
+        active_end = N_LINES_VISIBLE;  // 480
+    } else {
+        active_start = DEFAULT_ACTIVE_START;
+        active_end = DEFAULT_ACTIVE_END;
+    }
 
     // Probe: show actual gfx_buffer contents - first 320 bytes as raw colors
     // This fires once after mode is set, showing what Wolf3D wrote (or didn't)
