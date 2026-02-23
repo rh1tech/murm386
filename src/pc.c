@@ -724,6 +724,28 @@ PC *pc_new(SimpleFBDrawFunc *redraw, void (*poll)(void *), void *redraw_data,
 		insertdisk(drivenum, disks[i]);
 	}
 
+	/* Tell SeaBIOS about hard drives via CMOS so it sets up INT 13h
+	 * and BDA 0x475.  Without this the BIOS never probes our INT 13h
+	 * handler and DOS sees zero hard drives.
+	 *
+	 * CMOS 0x12: high nibble = drive 0 type, low nibble = drive 1 type
+	 *            0xF means "type 47" (user-defined geometry)
+	 * CMOS 0x19/0x1A: extended type for drive 0/1 (47 = user-defined)
+	 */
+	{
+		uint8_t cmos12 = 0;
+		if (hdcount >= 1) {
+			cmos12 |= 0xF0;        /* drive 0 = type 47 */
+			cmos_set(pc->cmos, 0x19, 47);
+		}
+		if (hdcount >= 2) {
+			cmos12 |= 0x0F;        /* drive 1 = type 47 */
+			cmos_set(pc->cmos, 0x1A, 47);
+		}
+		if (cmos12)
+			cmos_set(pc->cmos, 0x12, cmos12);
+	}
+
 	int piix3_devfn;
 	pc->i440fx = i440fx_init(&pc->pcibus, &piix3_devfn);
 	/* PCI IDE removed - using INT 13h disk handler instead */
