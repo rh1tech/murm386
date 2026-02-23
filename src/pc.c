@@ -1,10 +1,12 @@
 #include "pc.h"
+#include "dss.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <hardware/watchdog.h>
 
 #ifdef USEKVM
 #define cpu_raise_irq cpukvm_raise_irq
@@ -106,7 +108,13 @@ static u8 pc_io_read(void *o, int addr)
 	case 0x481: case 0x482: case 0x483: case 0x487:
 		val = i8257_read_pageh(pc->isa_dma, addr - 0x480);
 		return val;
-	case 0xc0: case 0xc2: case 0xc4: case 0xc6:
+	case 0xc0: case 0xc1:
+		/* SN76489 is write-only; return 0xFF on read when Tandy active */
+		if (pc->sn76489 && pc->tandy_enabled)
+			return 0xff;
+		val = i8257_read_chan(pc->isa_hdma, addr - 0xc0, 1);
+		return val;
+	case 0xc2: case 0xc4: case 0xc6:
 	case 0xc8: case 0xca: case 0xcc: case 0xce:
 		val = i8257_read_chan(pc->isa_hdma, addr - 0xc0, 1);
 		return val;
@@ -132,6 +140,21 @@ static u8 pc_io_read(void *o, int addr)
 		 * Bits 3-0: axes timeout (0 = timed out, no joystick)
 		 * Return 0xF0 to indicate axes have timed out (no joystick present) */
 		return 0xf0;
+	// Disney Sound Source
+	case 0x378:
+	case 0x379:
+		if (pc->dss_enabled)
+			return dss_in(addr);
+		return 0xFF;
+	/* LPT data ports (Covox): write-only DAC, reads return 0xFF */
+	case 0x278:
+		return 0xff;
+	/* LPT status ports: bit7=nBusy(1=ready), bits6..3=1 (idle/ready) */
+	case 0x279:
+		return 0xf8;
+	/* LPT control ports */
+	case 0x37a: case 0x27a:
+		return 0x04;
 	default:
 		//fprintf(stderr, "in 0x%x <= 0x%x\n", addr, 0xff);
 		return 0xff;
@@ -203,6 +226,14 @@ static int pc_io_read_string(void *o, int addr, uint8_t *buf, int size, int coun
 	return 0;
 }
 
+#if EMULATE_LTEMS
+uint8_t ems_pages[4] = {0};
+
+inline static void out_ems(const uint16_t port, const uint8_t data) {
+    ems_pages[port & 3] = data;
+}
+#endif
+
 static void pc_io_write(void *o, int addr, u8 val)
 {
 	PC *pc = o;
@@ -217,6 +248,11 @@ static void pc_io_write(void *o, int addr, u8 val)
 	case 0x3fc: case 0x3fd: case 0x3fe: case 0x3ff:
 		u8250_reg_write(pc->serial, addr - 0x3f8, val);
 		return;
+#if EMULATE_LTEMS
+    case 0x260: case 0x261: case 0x262: case 0x263:
+		out_ems(addr, val);
+        return;
+#endif
 	case 0x2f8: case 0x2f9: case 0x2fa: case 0x2fb:
 	case 0x2fc: case 0x2fd: case 0x2fe: case 0x2ff:
 	case 0x2e8: case 0x2e9: case 0x2ea: case 0x2eb:
@@ -305,7 +341,15 @@ static void pc_io_write(void *o, int addr, u8 val)
 	case 0x481: case 0x482: case 0x483: case 0x487:
 		i8257_write_pageh(pc->isa_dma, addr - 0x480, val);
 		return;
-	case 0xc0: case 0xc2: case 0xc4: case 0xc6:
+	/* 0xC0/0xC1: SN76489 data port when Tandy enabled, hdma ch0 otherwise.
+	 * 0xC2-0xCE: always hdma (Tandy only occupied 0xC0). */
+	case 0xc0: case 0xc1:
+		if (pc->sn76489 && pc->tandy_enabled)
+			sn76489_write(pc->sn76489, val);
+		else
+			i8257_write_chan(pc->isa_hdma, addr - 0xc0, val, 1);
+		return;
+	case 0xc2: case 0xc4: case 0xc6:
 	case 0xc8: case 0xca: case 0xcc: case 0xce:
 		i8257_write_chan(pc->isa_hdma, addr - 0xc0, val, 1);
 		return;
@@ -328,11 +372,32 @@ static void pc_io_write(void *o, int addr, u8 val)
 	case 0x226: case 0x22c:
 		sb16_dsp_write(pc->sb16, addr, val);
 		return;
-	/* Emulink removed - using INT 13h disk handler instead */
-	case 0xf1f4:
+	/* Tandy 3-Voice Sound (SN76489) - additional alias ports.
+	 * Primary port 0xC0 is handled above.
+	 * 0x1E0: Tandy 1000 SX/TX/HX data port
+	 * 0x2C0: Tandy 1000 A/B mirror */
+	case 0x1E0: case 0x2C0:
+		if (pc->sn76489 && pc->tandy_enabled)
+			sn76489_write(pc->sn76489, val);
+		return;
+	/* Covox Speech Thing (parallel port DAC)
+	 * 0x278 = LPT2 data. */
+	case 0x278:
+		if (pc->covox_enabled)
+			pc->covox_sample = (int16_t)((val - 128) << 6);
+		return;
+	// Disney Sound Source
+    case 0x378:
+    case 0x37A:
+		if (pc->dss_enabled)
+			dss_out(addr, val);
+		return;
+	/* LPT status/control ports are read-only - writes ignored */
+	case 0x379: case 0x279:
+	case 0x27a:
 		return;
 	default:
-		fprintf(stderr, "out 0x%x => 0x%x\n", val, addr);
+///		fprintf(stderr, "out 0x%x => 0x%x\n", val, addr);
 		return;
 	}
 }
@@ -344,6 +409,10 @@ static void pc_io_write16(void *o, int addr, u16 val)
 	/* IDE ports removed - using INT 13h disk handler instead */
 	case 0x1f0: case 0x170:
 		return;
+    case 0x260: case 0x261: case 0x262: case 0x263:
+		pc_io_write(o, addr, (uint8_t) val);
+		pc_io_write(o, addr + 1, val >> 8);
+        return;
 	case 0x3c0: case 0x3c1: case 0x3c2: case 0x3c3:
 	case 0x3c4: case 0x3c5: case 0x3c6: case 0x3c7:
 	case 0x3c8: case 0x3c9: case 0x3ca: case 0x3cb:
@@ -365,7 +434,7 @@ static void pc_io_write16(void *o, int addr, u16 val)
 	case 0x310:
 		return;
 	default:
-		fprintf(stderr, "outw 0x%x => 0x%x\n", val, addr);
+///		fprintf(stderr, "outw 0x%x => 0x%x\n", val, addr);
 		return;
 	}
 }
@@ -386,8 +455,12 @@ static void pc_io_write32(void *o, int addr, u32 val)
 	/* Emulink removed - using INT 13h disk handler instead */
 	case 0xf1f0: case 0xf1f4:
 		return;
+    case 0x260: case 0x261: case 0x262: case 0x263:
+		pc_io_write16(o, addr, (uint16_t) val);
+		pc_io_write16(o, addr + 2, val >> 16);
+        return;
 	default:
-		fprintf(stderr, "outd 0x%x => 0x%x\n", val, addr);
+///		do_log(stderr, "outd 0x%x => 0x%x\n", val, addr);
 		return;
 	}
 }
@@ -408,12 +481,14 @@ void pc_vga_step(void *o)
 	}
 }
 
-void pc_step(PC *pc)
+void __not_in_flash_func(pc_step)(PC *pc)
 {
 #ifndef USEKVM
 	if (pc->reset_request) {
 		pc->reset_request = 0;
-		load_bios_and_reset(pc);
+		*(uint32_t*)(0x20000000 + (512ul << 10) - 32) = 0x1927fa52; // magic to fast reboot
+		watchdog_reboot(0, 0, 0);
+		/// load_bios_and_reset(pc);
 	}
 #endif
 	int refresh = vga_step(pc->vga);
@@ -590,6 +665,9 @@ static void pc_reset_request(void *p)
 	pc->reset_request = 1;
 }
 
+extern uint8_t gfx_buffer[256ul << 10];
+
+
 PC *pc_new(SimpleFBDrawFunc *redraw, void (*poll)(void *), void *redraw_data,
 	   u8 *fb, PCConfig *conf)
 {
@@ -666,7 +744,7 @@ PC *pc_new(SimpleFBDrawFunc *redraw, void (*poll)(void *), void *redraw_data,
 	pc->boot_start_time = 0;
 
 	pc->vga_mem_size = conf->vga_mem_size;
-	pc->vga_mem = bigmalloc(pc->vga_mem_size);
+	pc->vga_mem = gfx_buffer; // TODO: if more than 256k?
 	memset(pc->vga_mem, 0, pc->vga_mem_size);
 	pc->vga = vga_init(pc->vga_mem, pc->vga_mem_size,
 			   fb, conf->width, conf->height);
@@ -709,12 +787,17 @@ PC *pc_new(SimpleFBDrawFunc *redraw, void (*poll)(void *), void *redraw_data,
 			    pc->isa_dma, pc->isa_hdma,
 			    pc->pic, set_irq);
 	pc->pcspk = pcspk_init(pc->pit);
+	pc->sn76489 = sn76489_new();
 
 	// Audio/mouse enable flags default to enabled
 	// These can be disabled via config_set_* functions at runtime
 	pc->adlib_enabled = 1;
 	pc->sb16_enabled = 1;
 	pc->pcspk_enabled = 1;
+	pc->tandy_enabled = 1;
+	pc->covox_enabled = 1;
+	pc->covox_sample  = 0;
+	pc->dss_enabled = 1;
 	pc->mouse_enabled = 1;
 
 	pc->port92 = 0x2;
@@ -736,7 +819,8 @@ void mixer_callback (void *opaque, uint8_t *stream, int free)
 	assert(free / 2 <= MIXER_BUF_LEN);
 
 	// Early exit if all audio disabled - major performance optimization
-	if (!pc->adlib_enabled && !pc->sb16_enabled && !pc->pcspk_enabled) {
+	if (!pc->adlib_enabled && !pc->sb16_enabled && !pc->pcspk_enabled &&
+	    !pc->tandy_enabled && !pc->covox_enabled) {
 		memset(stream, 0, free);
 		return;
 	}
@@ -776,6 +860,61 @@ void mixer_callback (void *opaque, uint8_t *stream, int free)
 			if (res > 32767) res = 32767;
 			if (res < -32768) res = -32768;
 			d2[i] = res;
+		}
+	}
+
+	// Tandy 3-Voice Sound (SN76489) - stereo int16 (only if enabled)
+	// Uses a static buffer sized for a full audio frame to avoid truncation.
+	// tmpbuf is only MIXER_BUF_LEN bytes which is smaller than 'free' bytes
+	// for stereo output, so we use a dedicated static buffer here.
+	if (pc->sn76489 && pc->tandy_enabled) {
+		// Static buffer: max 768 stereo int16 frames (> 735 TARGET_SAMPLES_PER_FRAME)
+		static int16_t tandy_buf[768 * 2];
+		int frames = free / 4;     // number of stereo frames needed
+		if (frames > 768) frames = 768;
+		int tandy_bytes = frames * 4;
+		memset(tandy_buf, 0, tandy_bytes);
+		sn76489_callback(pc->sn76489, (uint8_t *)tandy_buf, tandy_bytes);
+		for (int i = 0; i < frames * 2; i++) {
+			int res = (int)d2[i] + (int)tandy_buf[i];
+			if (res > 32767)  res = 32767;
+			if (res < -32768) res = -32768;
+			d2[i] = (int16_t)res;
+		}
+	}
+
+	// Covox Speech Thing - sample-and-hold DAC on LPT2 port (only if enabled)
+	// covox_sample decays toward silence between writes to avoid DC offset buzz
+	if (pc->covox_enabled) {
+		int16_t cv = pc->covox_sample;
+		if (cv != 0) {
+			for (int i = 0; i < free / 2; i++) {
+				int res = (int)d2[i] + (int)cv;
+				if (res > 32767)  res = 32767;
+				if (res < -32768) res = -32768;
+				d2[i] = (int16_t)res;
+			}
+			// Decay toward silence: shift right each frame (~60ms to silence)
+			pc->covox_sample = (int16_t)(cv - (cv >> 4));
+			if (pc->covox_sample > -2 && pc->covox_sample < 2)
+				pc->covox_sample = 0;
+		}
+	}
+
+	// Disney Sound Source
+	if (pc->dss_enabled) {
+		for (int i = 0; i < free / 2; i += 2) {
+			int16_t cv = dss_sample_step();
+			// Left
+			int res = d2[i] + cv;
+			if (res > 32767) res = 32767;
+			if (res < -32768) res = -32768;
+			d2[i] = res;
+			// Right
+			res = d2[i + 1] + cv;
+			if (res > 32767) res = 32767;
+			if (res < -32768) res = -32768;
+			d2[i + 1] = res;
 		}
 	}
 }

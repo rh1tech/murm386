@@ -42,7 +42,8 @@
 
 /* Note: CPUI386 struct is defined in i386.h */
 
-#define dolog(...) fprintf(stderr, __VA_ARGS__)
+//#define dolog(...) fprintf(stderr, __VA_ARGS__)
+#define dolog(...)
 #define likely(x) __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
 
@@ -193,10 +194,14 @@ static uword sext16(u16 a)
 }
 #endif
 
-static uword sext32(u32 a)
+inline static uword sext32(u32 a)
 {
 	return (sword) (s32) a;
 }
+
+#if EMULATE_LTEMS
+#include "ems.c.inl"
+#endif
 
 #ifdef I386_OPT1
 /* only works on hosts that are little-endian and support unaligned access */
@@ -204,31 +209,61 @@ static uword sext32(u32 a)
 /* ARM Cortex-M33 optimized versions using inline assembly macros */
 static inline u8 pload8(CPUI386 *cpu, uword addr)
 {
+#if EMULATE_LTEMS
+	if (__builtin_expect(addr - EMS_START < (EMS_END - EMS_START), 0)) {
+		return ems_read(addr - EMS_START);
+	}
+#endif
 	return PLOAD8_INLINE(cpu->phys_mem, addr);
 }
 
 static inline u16 pload16(CPUI386 *cpu, uword addr)
 {
+#if EMULATE_LTEMS
+	if (__builtin_expect(addr - EMS_START < (EMS_END - EMS_START), 0)) {
+		return ems_readw(addr - EMS_START);
+	}
+#endif
 	return PLOAD16_INLINE(cpu->phys_mem, addr);
 }
 
 static inline u32 pload32(CPUI386 *cpu, uword addr)
 {
+#if EMULATE_LTEMS
+	if (__builtin_expect(addr - EMS_START < (EMS_END - EMS_START), 0)) {
+		return ems_readdw(addr - EMS_START);
+	}
+#endif
 	return PLOAD32_INLINE(cpu->phys_mem, addr);
 }
 
 static inline void pstore8(CPUI386 *cpu, uword addr, u8 val)
 {
+#if EMULATE_LTEMS
+	if (__builtin_expect(addr - EMS_START < (EMS_END - EMS_START), 0)) {
+		return ems_write(addr - EMS_START, val);
+	}
+#endif
 	PSTORE8_INLINE(cpu->phys_mem, addr, val);
 }
 
 static inline void pstore16(CPUI386 *cpu, uword addr, u16 val)
 {
+#if EMULATE_LTEMS
+	if (__builtin_expect(addr - EMS_START < (EMS_END - EMS_START), 0)) {
+		return ems_writew(addr - EMS_START, val);
+	}
+#endif
 	PSTORE16_INLINE(cpu->phys_mem, addr, val);
 }
 
 static inline void pstore32(CPUI386 *cpu, uword addr, u32 val)
 {
+#if EMULATE_LTEMS
+	if (__builtin_expect(addr - EMS_START < (EMS_END - EMS_START), 0)) {
+		return ems_writedw(addr - EMS_START, val);
+	}
+#endif
 	PSTORE32_INLINE(cpu->phys_mem, addr, val);
 }
 #else
@@ -314,7 +349,7 @@ enum {
 	CC_AND, CC_OR, CC_XOR,
 };
 
-static int get_CF(CPUI386 *cpu)
+static int __not_in_flash_func(get_CF)(CPUI386 *cpu)
 {
 	/* Fast path: CF not lazy - just return from flags */
 	if (likely(!(cpu->cc.mask & CF))) {
@@ -367,7 +402,7 @@ static int get_CF(CPUI386 *cpu)
 	return 0;
 }
 
-const static u8 parity_tab[256] = {
+const static u8 parity_tab[256] __not_in_flash("parity_tab") = {
   1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1,
   0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0,
   0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0,
@@ -386,7 +421,7 @@ const static u8 parity_tab[256] = {
   1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1
 };
 
-static int get_PF(CPUI386 *cpu)
+static int __always_inline get_PF(CPUI386 *cpu)
 {
 	if (likely(!(cpu->cc.mask & PF))) {
 		return !!(cpu->flags & PF);
@@ -394,7 +429,7 @@ static int get_PF(CPUI386 *cpu)
 	return parity_tab[cpu->cc.dst & 0xff];
 }
 
-static int get_AF(CPUI386 *cpu)
+static int __not_in_flash_func(get_AF)(CPUI386 *cpu)
 {
 	if (likely(!(cpu->cc.mask & AF))) {
 		return !!(cpu->flags & AF);
@@ -429,7 +464,7 @@ static int get_AF(CPUI386 *cpu)
 	return 0;
 }
 
-static int IRAM_ATTR get_ZF(CPUI386 *cpu)
+static int __always_inline get_ZF(CPUI386 *cpu)
 {
 	if (likely(!(cpu->cc.mask & ZF))) {
 		return !!(cpu->flags & ZF);
@@ -437,7 +472,7 @@ static int IRAM_ATTR get_ZF(CPUI386 *cpu)
 	return cpu->cc.dst == 0;
 }
 
-static int IRAM_ATTR get_SF(CPUI386 *cpu)
+static int __always_inline get_SF(CPUI386 *cpu)
 {
 	if (likely(!(cpu->cc.mask & SF))) {
 		return !!(cpu->flags & SF);
@@ -445,7 +480,7 @@ static int IRAM_ATTR get_SF(CPUI386 *cpu)
 	return cpu->cc.dst >> (sizeof(uword) * 8 - 1);
 }
 
-static int get_OF(CPUI386 *cpu)
+static int __not_in_flash_func(get_OF)(CPUI386 *cpu)
 {
 	if (likely(!(cpu->cc.mask & OF))) {
 		return !!(cpu->flags & OF);
@@ -3872,7 +3907,7 @@ static bool IRAM_ATTR_CPU_EXEC1 cpu_exec1(CPUI386 *cpu, int stepcount)
 		break;
 	}
 #else
-	static const DRAM_ATTR void *pfxlabel[] = {
+	static const void *pfxlabel[] __not_in_flash("pfxlabel") = {
 /* 0x00 */	&&f0x00_fast, &&f0x01_fast, &&f0x02_fast, &&f0x03_fast, &&f0x04_fast, &&f0x05_fast, &&f0x06, &&f0x07,
 /* 0x08 */	&&f0x08_fast, &&f0x09_fast, &&f0x0a_fast, &&f0x0b_fast, &&f0x0c_fast, &&f0x0d_fast, &&f0x0e, &&f0x0f,
 /* 0x10 */	&&f0x10, &&f0x11, &&f0x12, &&f0x13, &&f0x14, &&f0x15, &&f0x16, &&f0x17,
@@ -6275,7 +6310,7 @@ GRPEND
 #ifdef I386_OPT2
 		// Computed goto dispatch for 0x0f two-byte opcodes
 		// Note: MMX opcodes (0x60-0x7f, 0xd1-0xdf, 0xe1-0xef, 0xf1-0xfe) included when I386_ENABLE_MMX
-		static const DRAM_ATTR void *pfxlabel_0f[] = {
+		static const void *pfxlabel_0f[] __not_in_flash("pfxlabel_0f") = {
 /* 0x00 */	&&f0f_0x00, &&f0f_0x01, &&f0f_0x02, &&f0f_0x03, &&f0f_ud, &&f0f_ud, &&f0f_0x06, &&f0f_ud,
 /* 0x08 */	&&f0f_ud, &&f0f_0x09, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud,
 /* 0x10 */	&&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud, &&f0f_ud,
@@ -7687,7 +7722,7 @@ static bool pmret(CPUI386 *cpu, bool opsz16, int off, bool isiret)
 	return true;
 }
 
-void cpui386_step(CPUI386 *cpu, int stepcount)
+void __not_in_flash_func(cpui386_step)(CPUI386 *cpu, int stepcount)
 {
 	if ((cpu->flags & IF) && cpu->intr) {
 		cpu->intr = false;

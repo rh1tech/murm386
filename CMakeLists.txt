@@ -1,10 +1,24 @@
+# == DO NOT EDIT THE FOLLOWING LINES for the Raspberry Pi Pico VS Code Extension to work ==
+if(WIN32)
+    set(USERHOME $ENV{USERPROFILE})
+else()
+    set(USERHOME $ENV{HOME})
+endif()
+set(sdkVersion 2.2.0)
+set(toolchainVersion 14_2_Rel1)
+set(picotoolVersion 2.2.0-a4)
+set(picoVscode ${USERHOME}/.pico-sdk/cmake/pico-vscode.cmake)
+if (EXISTS ${picoVscode})
+    include(${picoVscode})
+endif()
+# ====================================================================================
 cmake_minimum_required(VERSION 3.13)
 
 # Set board to Pico 2 (RP2350)
 set(PICO_BOARD pico2 CACHE STRING "Pico board type")
 
 # Board configuration variant (M1, M2)
-set(BOARD "M1" CACHE STRING "Board variant: M1 or M2")
+set(BOARD "M2" CACHE STRING "Board variant: M1 or M2")
 # Alias for backwards compatibility
 if(DEFINED BOARD_VARIANT AND NOT DEFINED BOARD)
     set(BOARD ${BOARD_VARIANT})
@@ -12,16 +26,16 @@ endif()
 
 # CPU overclock configuration (378, 504 MHz)
 # 378 = stable overclock (default), 504 = high overclock
-set(CPU_SPEED "378" CACHE STRING "CPU clock in MHz: 378, 504")
+set(CPU_SPEED "504" CACHE STRING "CPU clock in MHz: 378, 504")
 
 # PSRAM speed configuration (133, 166 MHz target)
-set(PSRAM_SPEED "133" CACHE STRING "PSRAM max frequency in MHz: 133, 166")
+set(PSRAM_SPEED "166" CACHE STRING "PSRAM max frequency in MHz: 133, 166")
 
 # MOS2 (Murmulator OS 2) build - generates .m1p2/.m2p2 instead of .uf2
 option(MOS2 "Build for Murmulator OS 2 (m1p2/m2p2 format)" OFF)
 
 # USB HID keyboard support (disabled by default to keep USB CDC for debug)
-option(USB_HID_ENABLED "Enable USB HID keyboard (disables USB CDC stdio)" OFF)
+option(USB_HID_ENABLED "Enable USB HID keyboard (disables USB CDC stdio)" ON)
 
 # Debug output (disabled by default for cleaner console)
 option(DEBUG_ENABLED "Enable verbose debug output" OFF)
@@ -135,6 +149,7 @@ add_library(video_driver
 target_include_directories(video_driver PUBLIC drivers/vga src)
 target_compile_definitions(video_driver PRIVATE
     BOARD_${BOARD}
+    RP2350_BUILD=1
 )
 target_link_libraries(video_driver pico_stdlib hardware_dma hardware_pio hardware_clocks hardware_sync)
 
@@ -182,6 +197,8 @@ set(EMU_CORE_SOURCES
     src/sb16.c       # Sound Blaster 16
     src/pcspk.c      # PC Speaker
     src/fmopl.c      # FM OPL synthesis engine
+    src/sn76489.c    # Tandy 3-Voice Sound (SN76489)
+    src/dss.c        # Disney Sound Source
 
     # Optional devices (can be disabled for size)
     # src/fpu.c      # FPU emulation - disabled for initial port
@@ -239,9 +256,11 @@ target_compile_definitions(murm386 PRIVATE
     RP2350_BUILD=1
 
     # Emulator configuration (7MB max to fit in 8MB PSRAM with VGA memory)
-    EMU_MEM_SIZE_MB=7
+    EMU_MEM_SIZE_MB=6
     EMU_VGA_MEM_SIZE_KB=256
     EMU_CPU_GEN=4
+
+    EMULATE_LTEMS=0
 
     # Disable features for initial port
     NO_FPU=1
@@ -303,7 +322,7 @@ target_link_libraries(murm386
 if(USB_HID_ENABLED)
     message(STATUS "USB HID enabled: Using UART for stdio (USB is Host mode for keyboard)")
     pico_enable_stdio_usb(murm386 0)
-    pico_enable_stdio_uart(murm386 1)
+    pico_enable_stdio_uart(murm386 0)
 else()
     # USB Serial console (when USB HID is disabled)
     pico_enable_stdio_usb(murm386 1)
@@ -351,3 +370,5 @@ message(STATUS "  USB HID:        ${USB_HID_ENABLED}")
 message(STATUS "  Debug Output:   ${DEBUG_ENABLED}")
 message(STATUS "  MOS2 Build:     ${MOS2}")
 message(STATUS "")
+
+target_link_options(murm386 PRIVATE -Xlinker --print-memory-usage --data-sections)

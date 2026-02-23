@@ -39,10 +39,12 @@
 #include "esp_attr.h"
 #elif defined(RP2350_BUILD)
 #include "pico/stdlib.h"
+#include "vga_hw.h"
 #define IRAM_ATTR __time_critical_func()
 #else
 #define IRAM_ATTR
 #endif
+
 
 #ifdef BUILD_ESP32
 void *pcmalloc(long size);
@@ -50,127 +52,13 @@ void *pcmalloc(long size);
 #define pcmalloc malloc
 #endif
 
-//#define DEBUG_VBE
-//#define DEBUG_VGA_REG
-
-#define MSR_COLOR_EMULATION 0x01
-#define MSR_PAGE_SELECT     0x20
-
-#define ST01_V_RETRACE      0x08
-#define ST01_DISP_ENABLE    0x01
-
-#define VBE_DISPI_INDEX_ID              0x0
-#define VBE_DISPI_INDEX_XRES            0x1
-#define VBE_DISPI_INDEX_YRES            0x2
-#define VBE_DISPI_INDEX_BPP             0x3
-#define VBE_DISPI_INDEX_ENABLE          0x4
-#define VBE_DISPI_INDEX_BANK            0x5
-#define VBE_DISPI_INDEX_VIRT_WIDTH      0x6
-#define VBE_DISPI_INDEX_VIRT_HEIGHT     0x7
-#define VBE_DISPI_INDEX_X_OFFSET        0x8
-#define VBE_DISPI_INDEX_Y_OFFSET        0x9
-#define VBE_DISPI_INDEX_VIDEO_MEMORY_64K 0xa
-#define VBE_DISPI_INDEX_NB              0xb
-
-#define VBE_DISPI_ID0                   0xB0C0
-#define VBE_DISPI_ID1                   0xB0C1
-#define VBE_DISPI_ID2                   0xB0C2
-#define VBE_DISPI_ID3                   0xB0C3
-#define VBE_DISPI_ID4                   0xB0C4
-#define VBE_DISPI_ID5                   0xB0C5
-
-#define VBE_DISPI_DISABLED              0x00
-#define VBE_DISPI_ENABLED               0x01
-#define VBE_DISPI_GETCAPS               0x02
-#define VBE_DISPI_8BIT_DAC              0x20
-#define VBE_DISPI_LFB_ENABLED           0x40
-#define VBE_DISPI_NOCLEARMEM            0x80
-
-#define FB_ALLOC_ALIGN (1 << 20)
-
-#define MAX_TEXT_WIDTH 132
-#define MAX_TEXT_HEIGHT 60
-
-struct FBDevice {
-    /* the following is set by the device */
-    int width;
-    int height;
-    int stride; /* current stride in bytes */
-    uint8_t *fb_data; /* current pointer to the pixel data */
-};
-
-struct VGAState {
-    FBDevice *fb_dev;
-    int graphic_mode;
-    uint32_t cursor_blink_time;
-    int cursor_visible_phase;
-    uint32_t retrace_time;
-    int retrace_phase;
-    int force_8dm;
-
-    uint8_t *vga_ram;
-    int vga_ram_size;
-    
-    uint8_t sr_index;
-    uint8_t sr[8];
-    uint8_t gr_index;
-    uint8_t gr[16];
-    uint8_t ar_index;
-    uint8_t ar[21];
-    int ar_flip_flop;
-    uint8_t cr_index;
-    uint8_t cr[256]; /* CRT registers */
-    uint8_t msr; /* Misc Output Register */
-    uint8_t fcr; /* Feature Control Register */
-    uint8_t st00; /* status 0 */
-    uint8_t st01; /* status 1 */
-    uint8_t dac_state;
-    uint8_t dac_sub_index;
-    uint8_t dac_read_index;
-    uint8_t dac_write_index;
-    uint8_t dac_8bit;
-    uint8_t dac_cache[3]; /* used when writing */
-    uint8_t palette[768];
-    int palette_dirty;    /* set when palette is modified */
-    int32_t bank_offset;
-
-    uint32_t latch;
-    
-    /* text mode state */
-    uint32_t last_palette[16];
-#ifndef FULL_UPDATE
-    uint16_t last_ch_attr[MAX_TEXT_WIDTH * MAX_TEXT_HEIGHT];
-#endif
-    uint32_t last_width;
-    uint32_t last_height;
-    uint16_t last_line_offset;
-    uint16_t last_start_addr;
-    uint16_t last_cursor_offset;
-    uint8_t last_cursor_start;
-    uint8_t last_cursor_end;
-
-    /* VBE extension */
-    uint16_t vbe_index;
-    uint16_t vbe_regs[VBE_DISPI_INDEX_NB];
-    uint32_t vbe_start_addr;
-    uint32_t vbe_line_offset;
-
-#if defined(SCALE_3_2) || defined(SWAPXY)
-#ifndef LCD_WIDTH
-#define LCD_WIDTH 2048
-#endif
-    uint8_t tmpbuf[(LCD_WIDTH > 720 ? LCD_WIDTH : 720) * 3 * 2];
-#endif
-};
-
-uint32_t get_uticks();
 static int after_eq(uint32_t a, uint32_t b)
 {
     return (a - b) < (1u << 31);
 }
 
 #if BPP == 32
-static void vga_draw_glyph8(uint8_t *d, int linesize,
+static void __not_in_flash_func(vga_draw_glyph8)(uint8_t *d, int linesize,
                             const uint8_t *font_ptr, int h,
                             uint32_t fgcol, uint32_t bgcol)
 {
@@ -1199,7 +1087,7 @@ static void simplefb_clear(FBDevice *fb_dev,
 /* Update VGA retrace status based on timing.
  * This must be called frequently to ensure games polling 0x3DA see the
  * retrace bits toggle. Called from both vga_step() and vga_ioport_read(). */
-static int vga_update_retrace(VGAState *s)
+static int __not_in_flash_func(vga_update_retrace)(VGAState *s)
 {
     uint32_t now = get_uticks();
     int ret = 0;
@@ -1227,12 +1115,12 @@ static int vga_update_retrace(VGAState *s)
     return ret;
 }
 
-int vga_step(VGAState *s)
+int __not_in_flash_func(vga_step)(VGAState *s)
 {
     return vga_update_retrace(s);
 }
 
-void vga_refresh(VGAState *s,
+void __not_in_flash_func(vga_refresh)(VGAState *s,
                  SimpleFBDrawFunc *redraw_func, void *opaque, int full_update)
 {
     FBDevice *fb_dev = s->fb_dev;
@@ -1281,7 +1169,7 @@ void vga_refresh(VGAState *s,
 }
 
 /* force some bits to zero */
-static const uint8_t sr_mask[8] = {
+static const uint8_t sr_mask[8] __not_in_flash("sr_mask") = {
     (uint8_t)~0xfc,
     (uint8_t)~0xc2,
     (uint8_t)~0xf0,
@@ -1292,7 +1180,7 @@ static const uint8_t sr_mask[8] = {
     (uint8_t)~0x00,
 };
 
-static const uint8_t gr_mask[16] = {
+static const uint8_t gr_mask[16] __not_in_flash("gr_mask") = {
     (uint8_t)~0xf0, /* 0x00 */
     (uint8_t)~0xf0, /* 0x01 */
     (uint8_t)~0xf0, /* 0x02 */
@@ -1319,7 +1207,8 @@ uint32_t vga_ioport_read(VGAState *s, uint32_t addr)
      * Some games (like Goblins) poll 0x3BA for vertical retrace even in color mode.
      * Update retrace status on each read so tight polling loops see changes. */
     if (addr == 0x3ba || addr == 0x3da) {
-        vga_update_retrace(s);
+        /* st01 is updated by the VGA ISR on every scanline — just return it.
+         * Wolf3D polling this port sees exact hardware vblank timing. */
         val = s->st01;
         s->ar_flip_flop = 0;
         goto done;
@@ -1518,11 +1407,9 @@ void vga_ioport_write(VGAState *s, uint32_t addr, uint32_t val)
         case 0x01: /* horizontal display end */
         case 0x07:
         case 0x09:
-        case 0x0c:
-        case 0x0d:
+        case 0x0c: /* start address high */
+        case 0x0d: /* start address low */
         case 0x12: /* vertical display end */
-            s->cr[s->cr_index] = val;
-            break;
         default:
             s->cr[s->cr_index] = val;
             break;
@@ -1662,7 +1549,7 @@ uint32_t vbe_read(VGAState *s, uint32_t offset)
 #define GET_PLANE(data, p) (((data) >> ((p) * 8)) & 0xff)
 #endif
 
-static const uint32_t mask16[16] = {
+static const uint32_t mask16[16] __not_in_flash("mask16") = {
     PAT(0x00000000),
     PAT(0x000000ff),
     PAT(0x0000ff00),
@@ -2107,7 +1994,7 @@ PCIDevice *vga_pci_init(VGAState *s, PCIBus *bus,
 
 // from vgabios
 // stdvga mode 2
-const static uint8_t pal_ega[] = {
+const static uint8_t pal_ega[] __not_in_flash("pal_ega") = {
     0x00,0x00,0x00, 0x00,0x00,0x2a, 0x00,0x2a,0x00, 0x00,0x2a,0x2a,
     0x2a,0x00,0x00, 0x2a,0x00,0x2a, 0x2a,0x2a,0x00, 0x2a,0x2a,0x2a,
     0x00,0x00,0x15, 0x00,0x00,0x3f, 0x00,0x2a,0x15, 0x00,0x2a,0x3f,
@@ -2126,17 +2013,17 @@ const static uint8_t pal_ega[] = {
     0x3f,0x15,0x15, 0x3f,0x15,0x3f, 0x3f,0x3f,0x15, 0x3f,0x3f,0x3f
 };
 
-const static uint8_t actl[] = {
+const static uint8_t actl[] __not_in_flash("actl") = {
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x14, 0x07,
     0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
     0x0c, 0x00, 0x0f, 0x08 };
 
-const static uint8_t sequ[] = { 0x00, 0x03, 0x00, 0x02 };
+const static uint8_t sequ[] __not_in_flash("sequ") = { 0x00, 0x03, 0x00, 0x02 };
 
-const static uint8_t grdc[] = {
+const static uint8_t grdc[] __not_in_flash("grdc") = {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x0e, 0x0f, 0xff };
 
-const static uint8_t crtc[] = {
+const static uint8_t crtc[] __not_in_flash("crtc") = {
     0x5f, 0x4f, 0x50, 0x82, 0x55, 0x81, 0xbf, 0x1f,
     0x00, 0x4f, 0x0d, 0x0e, 0x00, 0x00, 0x00, 0x00,
     0x9c, 0x8e, 0x8f, 0x28, 0x1f, 0x96, 0xb9, 0xa3,
@@ -2443,8 +2330,18 @@ static void vga_initmode(VGAState *s)
 // Accessor functions for hardware VGA driver integration
 //=============================================================================
 
+// Visible columns are derived from CRTC Horizontal Display End (index 0x01).
+// In text modes this is 39 (40 cols) or 79 (80 cols).
+int __time_critical_func(vga_get_text_cols)(VGAState *s) {
+    if (!s) return 80;
+    int cols = (int)s->cr[0x01] + 1;
+    if (cols == 40 || cols == 80) return cols;
+    // Fallback: clamp to sane values
+    return (cols < 60) ? 40 : 80;
+}
+
 /* Get current VGA mode: 0=blank, 1=text, 2=graphics */
-int vga_get_mode(VGAState *s)
+int __time_critical_func(vga_get_mode)(VGAState *s)
 {
     if (!(s->ar_index & 0x20)) {
         return 0;  // blank
@@ -2468,7 +2365,7 @@ uint8_t vga_get_panning(VGAState *s)
 }
 
 /* Get cursor info for external VGA drivers */
-void vga_get_cursor_info(VGAState *s, int *x, int *y, int *start, int *end, int *visible)
+void __time_critical_func(vga_get_cursor_info)(VGAState *s, int *x, int *y, int *start, int *end, int *visible)
 {
     if (!s) {
         if (x) *x = 0;
@@ -2504,13 +2401,13 @@ void vga_get_cursor(VGAState *s, int *x, int *y, int *start, int *end)
 }
 
 /* Get pointer to VGA DAC palette (768 bytes: 256 colors × 3 RGB values, each 0-63) */
-const uint8_t *vga_get_palette(VGAState *s)
+const uint8_t* __time_critical_func(vga_get_palette)(VGAState *s)
 {
     return s->palette;
 }
 
 /* Check if palette was modified since last call (clears the flag) */
-int vga_is_palette_dirty(VGAState *s)
+int __time_critical_func(vga_is_palette_dirty)(VGAState *s)
 {
     int dirty = s->palette_dirty;
     s->palette_dirty = 0;
@@ -2520,7 +2417,7 @@ int vga_is_palette_dirty(VGAState *s)
 /* Get EGA 16-color palette (applies AC palette register indirection)
  * Fills palette16 with 16 entries of RGB triplets (48 bytes total)
  */
-void vga_get_palette16(VGAState *s, uint8_t *palette16)
+void __time_critical_func(vga_get_palette16)(VGAState *s, uint8_t *palette16)
 {
     for (int i = 0; i < 16; i++) {
         int v = s->ar[i];
@@ -2539,7 +2436,7 @@ void vga_get_palette16(VGAState *s, uint8_t *palette16)
  * Returns: 0=text, 1=CGA, 2=EGA planar 16-color, 3=VGA 256-color (mode 13h)
  * Also fills in width, height if pointers are non-NULL
  */
-int vga_get_graphics_mode(VGAState *s, int *width, int *height)
+int __time_critical_func(vga_get_graphics_mode)(VGAState *s, int *width, int *height)
 {
     // Check if display is enabled
     if (!(s->ar_index & 0x20)) {
@@ -2585,10 +2482,12 @@ int vga_get_graphics_mode(VGAState *s, int *width, int *height)
     if (height) *height = h;
 
     if (shift_control == 0) {
-        // Check for Mode X (256-color planar)
-        // AR10 bit 6 = 1 means 256-color mode
-        if (s->ar[0x10] & 0x40) {
-            return 3; // Treat as VGA 256-color (linear pixels in vga_ram)
+        // Mode X (320x200 256-color planar, unchained)
+        // Wolf3D and many DOS games use this for page-flipping.
+        // Our VRAM model stores planar bytes as packed-planes dwords.
+        /// TODO: vga_planar_mode = !(vga.sequencer[4] & 8) || !(vga.sequencer[4] & 6);
+        if (!(s->sr[VGA_SEQ_MEMORY_MODE] & 0x04u) && (s->ar[0x10] & 0x40) && w == 320) {
+            return 5; // VGA 256-color planar (Mode X)
         }
         // Debug: print register values for 640-wide modes
         static int debug_640 = 0;
@@ -2622,7 +2521,7 @@ int vga_get_graphics_mode(VGAState *s, int *width, int *height)
 /* Get VGA line offset (bytes per scanline in video memory)
  * For EGA planar mode, this is the number of uint32_t words per line
  */
-int vga_get_line_offset(VGAState *s)
+int __time_critical_func(vga_get_line_offset)(VGAState *s)
 {
     // cr[0x13] is the line offset in words (2 bytes each)
     // For planar mode, each "word" is a 32-bit value (4 planes packed)
@@ -2639,7 +2538,7 @@ int vga_get_line_compare(VGAState *s)
 }
 
 /* Check if VGA is in Vertical Retrace */
-bool vga_in_retrace(VGAState *s)
+bool __not_in_flash_func(vga_in_retrace)(VGAState *s)
 {
     return (s->st01 & ST01_V_RETRACE) != 0;
 }
@@ -2659,7 +2558,7 @@ int vga_get_cursor_blink_phase(VGAState *s)
 
 /* Get character cell height (from CRT register 0x09 max scan line + 1)
  * Typically 8 for CGA-style modes or 16 for VGA text mode */
-int vga_get_char_height(VGAState *s)
+int __time_critical_func(vga_get_char_height)(VGAState *s)
 {
     if (!s) return 16;
     int cheight = (s->cr[0x09] & 0x1f) + 1;
