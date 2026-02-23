@@ -182,7 +182,7 @@ static void show_warning_screen(const char *title, const char *message, int dela
 /**
  * Get microsecond timestamp.
  */
-uint32_t get_uticks(void) {
+uint32_t __not_in_flash_func(get_uticks)(void) {
     return time_us_32();
 }
 
@@ -191,7 +191,7 @@ uint32_t get_uticks(void) {
  */
 void *pcmalloc(long size) {
     // For small allocations, use regular malloc
-    if (size < 4096) {
+    if (size <= 2 * 4096) {
         return malloc(size);
     }
     // For large allocations, use PSRAM
@@ -548,7 +548,7 @@ static int load_config_from_sd(const char *filename) {
 //=============================================================================
 
 // Flash timing configuration for overclocking
-#define FLASH_MAX_FREQ_MHZ 88
+#define FLASH_MAX_FREQ_MHZ 66
 
 static void __no_inline_not_in_flash_func(set_flash_timings)(int cpu_mhz) {
     const int clock_hz = cpu_mhz * 1000000;
@@ -782,12 +782,12 @@ static bool init_emulator(void) {
         return false;
     }
 
+    // Give ISR direct access to VGA register state.
+    // From this point the ISR reads cr[], ar[] at the right moment.
+    vga_hw_set_vga_state(pc->vga);
+
     // Ensure emulator starts unpaused
     pc->paused = 0;
-
-    // Set VGA VRAM pointer (VGA memory is allocated by pc_new)
-    vga_hw_set_vram((uint8_t *)pc->vga_mem);
-    DBG_PRINT("  VGA VRAM set to 0x%08lx\n", (unsigned long)pc->vga_mem);
 
     // Initialize disk UI
     DBG_PRINT("Initializing Disk UI...\n");
@@ -811,9 +811,13 @@ static bool init_emulator(void) {
     pc->pcspk_enabled = config_get_pcspeaker();
     pc->adlib_enabled = config_get_adlib();
     pc->sb16_enabled = config_get_soundblaster();
+    pc->tandy_enabled = config_get_tandy();
+    pc->covox_enabled = config_get_covox();
+    pc->dss_enabled = config_get_dss();
     pc->mouse_enabled = config_get_mouse();
-    DBG_PRINT("  Audio: PC Speaker=%d, Adlib=%d, SB16=%d, Mouse=%d\n",
-              pc->pcspk_enabled, pc->adlib_enabled, pc->sb16_enabled, pc->mouse_enabled);
+    DBG_PRINT("  Audio: PC Speaker=%d, Adlib=%d, SB16=%d, Tandy=%d, Covox=%d, DSS=%d, Mouse=%d\n",
+              pc->pcspk_enabled, pc->adlib_enabled, pc->sb16_enabled,
+              pc->tandy_enabled, pc->covox_enabled, pc->dss_enabled, pc->mouse_enabled);
 
     // Check if BIOS file exists before loading
     DBG_PRINT("Loading BIOS...\n");
@@ -988,31 +992,21 @@ int main(void) {
     initialized = true;
 
     // Show welcome screen
-    show_welcome_screen();
+    if(*(uint32_t*)(0x20000000 + (512ul << 10) - 32) != 0x1927fa52) // magic to fast reboot
+        show_welcome_screen();
 
     DBG_PRINT("\nStarting emulation...\n");
 
-    // VGA update timing
-    uint64_t last_vga_update = 0;
-    const uint64_t vga_interval_us = 16000; // ~60Hz
-
+#if THROTTLING
     // Frame rate throttling for audio sync
     // Target ~60fps to match audio processing rate (16666us per frame)
     uint64_t frame_start_time = time_us_64();
     const uint64_t target_frame_time_us = 16666; // 60Hz = 16.666ms per frame
     int frame_step_count = 0;
     const int steps_per_frame = 100; // Number of outer loop iterations per frame
-
+#endif
     // Retrace-based frame submission state
-    static bool was_in_retrace = false;
-    static uint16_t latched_start_addr = 0;
-    static uint8_t latched_panning = 0;
-    static int latched_line_compare = -1;
     static int last_vga_mode = -1;
-
-    // Frame skipping - skip every other frame for better performance
-    int frame_skip_counter = 0;
-    const int frame_skip_pattern = 2; // Render 1 frame, skip 1 (30fps display)
 
     // Main emulation loop (Core 0)
     while (true) {
@@ -1035,52 +1029,6 @@ int main(void) {
         // Run CPU steps - batch multiple steps for efficiency
         for (int i = 0; i < 10; i++) {
             pc_step(pc);
-
-            // Check retrace and submit frame (fast path)
-            // We must check this frequently to catch the VBLANK edge
-            bool in_retrace = vga_in_retrace(pc->vga);
-
-            // Latch values at the END of retrace (falling edge of VBLANK)
-            if (was_in_retrace && !in_retrace) {
-                uint16_t start_addr = vga_get_start_addr(pc->vga);
-                uint8_t panning = vga_get_panning(pc->vga);
-                int line_compare = vga_get_line_compare(pc->vga);
-
-                // Glitch Filter logic - avoid mid-update artifacts during smooth scrolling
-                bool is_glitch = false;
-                if (start_addr == latched_start_addr + 1 && panning >= latched_panning) is_glitch = true;
-                else if (start_addr == latched_start_addr - 1 && panning <= latched_panning) is_glitch = true;
-                else if (latched_panning >= 6 && panning <= 1 && start_addr == latched_start_addr) is_glitch = true;
-                else if (latched_panning <= 1 && panning >= 6 && start_addr == latched_start_addr) is_glitch = true;
-
-                // Persistence check: If a glitch persists for more than 2 frames, assume it's real
-                static int glitch_counter = 0;
-                if (is_glitch) {
-                    glitch_counter++;
-                    if (glitch_counter > 2) {
-                        is_glitch = false;
-                        glitch_counter = 0;
-                    }
-                } else {
-                    glitch_counter = 0;
-                }
-
-                if (!is_glitch) {
-                    latched_start_addr = start_addr;
-                    latched_panning = panning;
-                    latched_line_compare = line_compare;
-
-                    // Frame skipping: only submit frame if not skipped
-                    frame_skip_counter++;
-                    if (frame_skip_counter < frame_skip_pattern) {
-                        vga_hw_submit_frame(latched_start_addr, latched_panning, latched_line_compare);
-                    } else {
-                        frame_skip_counter = 0; // Reset counter, skip this frame
-                    }
-                }
-            }
-
-            was_in_retrace = in_retrace;
         }
 
         // Poll keyboard less frequently (every 20 iterations ~5ms)
@@ -1091,67 +1039,10 @@ int main(void) {
             poll_keyboard();
         }
 
-        // Update heavy VGA state periodically (~60Hz)
-        // Note: Audio processing is handled by Core 1 for better performance
-        uint64_t now = time_us_64();
-        if (now - last_vga_update >= vga_interval_us) {
-            last_vga_update = now;
-
-            // Update cursor
-            int cx, cy, cs, ce, cv;
-            vga_get_cursor_info(pc->vga, &cx, &cy, &cs, &ce, &cv);
-            int char_height = vga_get_char_height(pc->vga);
-            if (cv) {
-                vga_hw_set_cursor(cx, cy, cs, ce, char_height);
-                // Sync cursor blink phase with emulator
-                vga_hw_set_cursor_blink(vga_get_cursor_blink_phase(pc->vga));
-            } else {
-                vga_hw_set_cursor(-1, -1, 0, 0, 16);  // Hide cursor
-            }
-
-            // Update VGA mode
-            int vga_mode = vga_get_mode(pc->vga);
-            if (vga_mode != last_vga_mode) {
-                printf("[VGA_HW] Mode change: %d -> %d\n", last_vga_mode, vga_mode);
-                vga_hw_set_mode(vga_mode);
-                last_vga_mode = vga_mode;
-            }
-
-            // Update palette and graphics submode for graphics modes
-            if (vga_mode == 2) {
-                // Only update palette when it actually changed
-                if (vga_is_palette_dirty(pc->vga)) {
-                    vga_hw_set_palette(vga_get_palette(pc->vga));
-                }
-
-                int gfx_w, gfx_h;
-                int gfx_submode = vga_get_graphics_mode(pc->vga, &gfx_w, &gfx_h);
-                int line_offset = vga_get_line_offset(pc->vga);
-                static int last_submode = -1;
-                if (gfx_submode != last_submode) {
-                    printf("[VGA_HW] Graphics submode=%d %dx%d offset=%d\n",
-                           gfx_submode, gfx_w, gfx_h, line_offset);
-                    last_submode = gfx_submode;
-                }
-                vga_hw_set_gfx_mode(gfx_submode, gfx_w, gfx_h, line_offset);
-
-                // For EGA mode, also update the 16-color palette
-                if (gfx_submode == 2) {
-                    uint8_t ega_pal[48];
-                    vga_get_palette16(pc->vga, ega_pal);
-                    vga_hw_set_palette16(ega_pal);
-                }
-            }
-
-            // For text mode, submit frame with current offset
-            if (vga_mode == 1) {
-                vga_hw_set_vram_offset(vga_get_start_addr(pc->vga));
-            }
-        }
-
         // Check for reset request
         if (pc->reset_request) {
             pc->reset_request = 0;
+            *(uint32_t*)(0x20000000 + (512ul << 10) - 32) = 0x1927fa52; // magic to fast reboot
             load_bios_and_reset(pc);
         }
 
@@ -1160,6 +1051,7 @@ int main(void) {
             settingsui_clear_restart();
             DBG_PRINT("Settings changed - triggering RP reset...\n");
             // Full hardware reset via watchdog
+            *(uint32_t*)(0x20000000 + (512ul << 10) - 32) = 0x1927fa52; // magic to fast reboot
             watchdog_reboot(0, 0, 0);
         }
 
@@ -1167,7 +1059,7 @@ int main(void) {
         if (pc->shutdown_state) {
             break;
         }
-
+#if THROTTLING
         // Frame rate throttling for audio synchronization
         frame_step_count++;
         if (frame_step_count >= steps_per_frame) {
@@ -1183,13 +1075,13 @@ int main(void) {
             // Reset frame timer for next frame
             frame_start_time = time_us_64();
         }
+#endif
     }
 
     DBG_PRINT("\nEmulation stopped.\n");
-
-    while (true) {
-        sleep_ms(1000);
-    }
-
+    *(uint32_t*)(0x20000000 + (512ul << 10) - 32) = 0x1927fa52; // magic to fast reboot
+    watchdog_reboot(0, 0, 0);
+    while (true);
+    __unreachable();
     return 0;
 }

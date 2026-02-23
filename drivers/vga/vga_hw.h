@@ -49,18 +49,9 @@
 // Initialize VGA hardware subsystem
 void vga_hw_init(void);
 
-// Set pointer to emulator's VRAM (tiny386's vga_mem)
-void vga_hw_set_vram(uint8_t *vram);
-
-// Set video mode (3 = 80x25 text, 0x13 = 320x200x256, etc.)
-void vga_hw_set_mode(int mode);
-
 // Set cursor position and size for text mode
 // char_height is the emulated character cell height (for scaling cursor to 16-line font)
 void vga_hw_set_cursor(int x, int y, int start, int end, int char_height);
-
-// Set cursor blink state (1 = visible, 0 = hidden during blink cycle)
-void vga_hw_set_cursor_blink(int blink_phase);
 
 // Set VRAM start offset for scrolling
 void vga_hw_set_vram_offset(uint16_t offset);
@@ -70,10 +61,6 @@ void vga_hw_set_panning(uint8_t panning);
 
 // Set Line Compare (scanline where address resets to 0)
 void vga_hw_set_line_compare(int line);
-
-// Submit a new frame state (registers) to be rendered
-// This signals Core 1 to copy VRAM and apply these registers at the next opportunity
-void vga_hw_submit_frame(uint16_t start_addr, uint8_t panning, int line_compare);
 
 // Update 256-color palette from emulator's VGA DAC
 // palette_data is 768 bytes (256 entries × 3 bytes RGB, each 0-63)
@@ -94,12 +81,15 @@ void vga_hw_update(void);
 // Get current frame count
 uint32_t vga_hw_get_frame_count(void);
 
-// Debug: get graphics pre-render stats (resets counters)
-void vga_hw_get_gfx_stats(uint32_t *prerender, uint32_t *fallback);
-
 // Legacy API (compatibility stubs)
 uint8_t *vga_hw_get_framebuffer(void);
 void vga_hw_clear(uint8_t color);
 
 // Set a single pixel (legacy, no-op)
 void vga_hw_set_pixel(int x, int y, uint8_t color);
+
+// Give the ISR direct read-only access to VGA register state.
+// Call once after vga_init(). ISR reads cr[], ar[] at the right moment —
+// no volatile intermediates, no synchronisation lag.
+#include "../../src/vga.h"
+void vga_hw_set_vga_state(VGAState *s);

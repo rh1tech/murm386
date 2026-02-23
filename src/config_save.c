@@ -27,6 +27,9 @@ static bool cfg_changed = false;
 static int cfg_pcspeaker = 1;
 static int cfg_adlib = 1;
 static int cfg_soundblaster = 1;
+static int cfg_tandy = 1;
+static int cfg_covox = 1;
+static int cfg_dss = 1;
 static int cfg_mouse = 1;
 static int cfg_cpu_freq = CPU_CLOCK_MHZ;
 static int cfg_psram_freq = PSRAM_MAX_FREQ_MHZ;
@@ -101,6 +104,30 @@ int config_get_soundblaster(void) { return cfg_soundblaster; }
 void config_set_soundblaster(int enabled) {
     if (cfg_soundblaster != enabled) {
         cfg_soundblaster = enabled;
+        cfg_changed = true;
+    }
+}
+
+int config_get_tandy(void) { return cfg_tandy; }
+void config_set_tandy(int enabled) {
+    if (cfg_tandy != enabled) {
+        cfg_tandy = enabled;
+        cfg_changed = true;
+    }
+}
+
+int config_get_covox(void) { return cfg_covox; }
+void config_set_covox(int enabled) {
+    if (cfg_covox != enabled) {
+        cfg_covox = enabled;
+        cfg_changed = true;
+    }
+}
+
+int config_get_dss(void) { return cfg_dss; }
+void config_set_dss(int enabled) {
+    if (cfg_dss != enabled) {
+        cfg_dss = enabled;
         cfg_changed = true;
     }
 }
@@ -208,6 +235,12 @@ bool config_save_all(void) {
     write_line(&fp, line);
     snprintf(line, sizeof(line), "soundblaster=%d\n", cfg_soundblaster);
     write_line(&fp, line);
+    snprintf(line, sizeof(line), "tandy=%d\n", cfg_tandy);
+    write_line(&fp, line);
+    snprintf(line, sizeof(line), "covox=%d\n", cfg_covox);
+    write_line(&fp, line);
+    snprintf(line, sizeof(line), "dss=%d\n", cfg_dss);
+    write_line(&fp, line);
     snprintf(line, sizeof(line), "mouse=%d\n", cfg_mouse);
     write_line(&fp, line);
     snprintf(line, sizeof(line), "cpu_freq=%d\n", cfg_cpu_freq);
@@ -239,10 +272,17 @@ int parse_murm386_ini(void* user, const char* section,
         cfg_adlib = atoi(value);
     } else if (strcmp(name, "soundblaster") == 0) {
         cfg_soundblaster = atoi(value);
+    } else if (strcmp(name, "tandy") == 0) {
+        cfg_tandy = atoi(value);
+    } else if (strcmp(name, "covox") == 0) {
+        cfg_covox = atoi(value);
+    } else if (strcmp(name, "dss") == 0) {
+        cfg_dss = atoi(value);
     } else if (strcmp(name, "mouse") == 0) {
         cfg_mouse = atoi(value);
-    } else if (strcmp(name, "cpu_freq") == 0) {
-        cfg_cpu_freq = atoi(value);
+/// TODO: it breaks REINIT vga clk?
+//    } else if (strcmp(name, "cpu_freq") == 0) {
+//        cfg_cpu_freq = atoi(value);
     } else if (strcmp(name, "psram_freq") == 0) {
         cfg_psram_freq = atoi(value);
     }

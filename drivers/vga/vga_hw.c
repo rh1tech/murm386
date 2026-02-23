@@ -42,14 +42,25 @@ static const struct pio_program pio_vga_program = {
 };
 
 // ============================================================================
-// VGA Timing (640x400 @ 70Hz - standard VGA text mode timing)
+// VGA Timing (640x480 @ 60Hz - standard? VGA text mode timing)
 // ============================================================================
+#ifndef VGA_SHIFT_PICTURE
+#define VGA_SHIFT_PICTURE 144
+#endif
 
-#define LINE_SIZE           800
-#define N_LINES_TOTAL       449
-#define N_LINES_VISIBLE     400
-#define LINE_VS_BEGIN       412
-#define LINE_VS_END         414
+#define VGA_CLK 25175000.0f
+
+#define LINE_SIZE       800
+#define N_LINES_TOTAL   525
+#define N_LINES_VISIBLE 480
+#define LINE_VS_BEGIN   490
+#define LINE_VS_END     491
+
+/// for 640*400
+#define TOP_BORDER    40
+#define BOTTOM_BORDER 40
+#define ACTIVE_START  TOP_BORDER
+#define ACTIVE_END    (TOP_BORDER + 400)   // 440
 
 #define HS_SIZE             96
 #define SHIFT_PICTURE       VGA_SHIFT_PICTURE  // Where active video starts (from board_config.h)
@@ -76,31 +87,26 @@ static int dma_ctrl_chan = -1;
 // PIO state
 static uint vga_sm = 0;
 
-// Spin lock for frame state synchronization
-static spin_lock_t *vga_state_lock = NULL;
-
 // Frame counter
 static volatile uint32_t frame_count = 0;
 static volatile uint32_t current_line = 0;
-
-// Pointer to tiny386's VGA RAM in PSRAM (set via vga_hw_set_vram)
-static uint8_t *vga_ram_psram = NULL;
 
 // Text buffer in SRAM (non-static to allow OSD reuse when paused)
 uint8_t text_buffer_sram[80 * 25 * 2] __attribute__((aligned(4)));
 static volatile int update_requested = 0;  // Set by update call
 static volatile int in_vblank = 0;         // Set by IRQ during vblank
 
-// Double-buffered graphics framebuffer in SRAM
-// 112KB supports up to 640x350 EGA (81 words * 350 lines * 4 = 113KB)
-// Mode X (320x400) not supported - would need 128KB
-#define GFX_BUFFER_SIZE (112 * 1024)
-static uint8_t gfx_buffer_a[GFX_BUFFER_SIZE] __attribute__((aligned(4)));
-static uint8_t gfx_buffer_b[GFX_BUFFER_SIZE] __attribute__((aligned(4)));
-static uint8_t * volatile gfx_display_buffer = gfx_buffer_a;  // ISR reads from this
-static uint8_t *gfx_write_buffer = gfx_buffer_b;    // Main loop writes to this
+#define GFX_BUFFER_SIZE (256 * 1024)
+uint8_t gfx_buffer[GFX_BUFFER_SIZE] __attribute__((aligned(4)));
 static volatile int gfx_write_done = 0;  // Set when write buffer has new frame
 static volatile int gfx_copy_allowed = 0;  // Set during vblank to allow copy
+
+// Visual debug overlay state (updated from emulator thread, read in ISR)
+// Packed to avoid tearing: mode in bits 7-4, submode in bits 3-0
+volatile uint8_t vdbg_mode_sub = 0x10; // default: mode=1, sub=0
+volatile uint8_t vdbg_vblank = 0;      // last vblank state seen at 0x3DA read
+volatile uint8_t vdbg_palette_ok = 0;  // set when palette first loaded
+volatile uint8_t vdbg_vram_ok = 0;     // set when first gfx VRAM write seen
 
 // Text mode palette (16 colors -> 6-bit VGA)
 static uint8_t txt_palette[16];
@@ -110,12 +116,9 @@ static uint16_t txt_palette_fast[256 * 4];
 
 // Graphics palette (256 entries) - 16-bit dithered format
 // Each entry: low byte = c_hi (conv0), high byte = c_lo (conv1)
-// Double buffered to avoid race conditions with ISR
+// even - A, odd - B
 static uint16_t palette_a[256];
 static uint16_t palette_b[256];
-static uint16_t * volatile active_palette = palette_a; // Used by ISR
-static uint16_t *pending_palette = palette_b;          // Used by update function
-static volatile bool palette_dirty = false;
 
 // 16-color EGA palette (for 16-color modes) - 8-bit VGA format with sync bits
 static uint8_t ega_palette[16];
@@ -140,17 +143,37 @@ static int cursor_x = 0, cursor_y = 0;
 static int cursor_start = 0, cursor_end = 15;
 static int cursor_blink_state = 1;
 
-// VRAM offset for scrolling (set by emulator, copied to frame_vram_offset during vblank)
-static uint16_t vram_offset = 0;
-static uint16_t frame_vram_offset = 0;  // Snapshotted at start of frame for consistent rendering
-static uint8_t pixel_panning = 0;       // Horizontal pixel panning (0-7)
-static uint8_t frame_pixel_panning = 0; // Snapshotted at start of frame
-static int line_compare = -1;           // Line Compare register (-1 = disabled/off-screen)
-static int frame_line_compare = -1;     // Snapshotted at start of frame
+// Direct pointer to VGA register state (set once by core0 after vga_init).
+// ISR reads cr[], ar[] directly at the right moment — no volatile intermediates.
+static VGAState *vga_state = NULL;
+
+// Per-frame values latched by ISR from vga_state->cr[] late in vblank
+static uint16_t frame_vram_offset   = 0;
+static uint8_t  frame_pixel_panning = 0;
+static int      frame_line_compare  = -1;
 
 // Debug counters
-static volatile uint32_t gfx_prerender_count = 0;
 static volatile uint32_t gfx_fallback_count = 0;
+
+
+static volatile int text_cols = 80;
+// Stride in *character cells* (uint32_t per cell in gfx_buffer text layout).
+// For VGA CRTC Offset (0x13): cells_per_row = cr13 * 2 (80-col -> 40*2, 40-col -> 20*2).
+static volatile int text_stride_cells = 80;
+
+static volatile int pending_text_cols = 80;
+static volatile int pending_text_stride = 80;
+static volatile int text_geom_pending = 0;
+
+inline static void vga_hw_submit_text_geom(int cols, int stride_cells) {
+    if (cols != 40 && cols != 80)
+        return;
+    if (stride_cells <= 0 || stride_cells > 256)
+        return;
+    pending_text_cols = cols;
+    pending_text_stride = stride_cells;
+    text_geom_pending = 1;
+}
 
 // ============================================================================
 // Color Conversion
@@ -165,7 +188,7 @@ static const uint8_t conv1[] = { 0b00, 0b01, 0b01, 0b01, 0b10, 0b11, 0b11, 0b11 
 
 // Convert 6-bit VGA DAC values (0-63) to 8-bit output with sync bits
 // Used for EGA/CGA palettes (no dithering)
-static uint8_t vga_color_to_output(uint8_t r6, uint8_t g6, uint8_t b6) {
+static inline uint8_t vga_color_to_output(uint8_t r6, uint8_t g6, uint8_t b6) {
     // Map 6-bit VGA colors to 2-bit per channel (RRGGBB in bits 0-5)
     // Bits 6-7 are sync: 0xC0 = no sync pulses during active video
     uint8_t r2 = r6 >> 4;  // 6-bit to 2-bit
@@ -177,7 +200,7 @@ static uint8_t vga_color_to_output(uint8_t r6, uint8_t g6, uint8_t b6) {
 // Convert 6-bit VGA DAC values to 16-bit dithered output
 // Returns: low byte = c_hi (conv0), high byte = c_lo (conv1)
 // When output as 16-bit, adjacent pixels get different colors for spatial dithering
-static uint16_t vga_color_to_dithered(uint8_t r6, uint8_t g6, uint8_t b6) {
+static void vga_color_to_dithered(uint8_t r6, uint8_t g6, uint8_t b6, uint32_t idx) {
     // Convert 6-bit (0-63) to 3-bit (0-7) for dither table lookup
     // 63/7 ≈ 9, so divide by 9
     uint8_t r = r6 / 9;
@@ -190,7 +213,8 @@ static uint16_t vga_color_to_dithered(uint8_t r6, uint8_t g6, uint8_t b6) {
     uint8_t c_hi = TMPL_LINE | (conv0[r] << 4) | (conv0[g] << 2) | conv0[b];
     uint8_t c_lo = TMPL_LINE | (conv1[r] << 4) | (conv1[g] << 2) | conv1[b];
 
-    return (uint16_t)c_hi | ((uint16_t)c_lo << 8);
+    palette_a[idx] = (uint16_t)c_hi | ((uint16_t)c_lo << 8);
+    palette_b[idx] = (uint16_t)c_lo | ((uint16_t)c_hi << 8);
 }
 
 static void init_palettes(void) {
@@ -238,10 +262,8 @@ static void init_palettes(void) {
     }
     
     // Initialize 256-color dithered palette with black (will be overwritten by emulator)
-    uint16_t black_dithered = vga_color_to_dithered(0, 0, 0);
     for (int i = 0; i < 256; i++) {
-        palette_a[i] = black_dithered;
-        palette_b[i] = black_dithered;
+        vga_color_to_dithered(0, 0, 0, i);
     }
     
     // Initialize CGA 4-color palette (palette 1 high intensity: black, cyan, magenta, white)
@@ -256,10 +278,54 @@ static void init_palettes(void) {
 // DMA Interrupt Handler - Renders each scanline
 // ============================================================================
 
+// Render VGA 256-color planar (Mode X: 320x200x256, unchained)
+// VRAM layout in our emulator: packed planes in dwords.
+// Each dword holds 4 bytes: plane0..plane3, and those bytes are pixels x%4.
+static void __time_critical_func(render_gfx_line_vga_planar256)(uint32_t line, uint32_t *output_buffer) {
+    uint32_t *out32 = (uint32_t *)((uint8_t *)output_buffer + SHIFT_PICTURE);
+
+    uint32_t src_line = (gfx_height > 200) ? line : (line >> 1);
+    if (src_line >= (uint32_t)gfx_height) {
+        uint32_t blank = TMPL_LINE | (TMPL_LINE << 8) | (TMPL_LINE << 16) | (TMPL_LINE << 24);
+        for (int i = 0; i < 160; i++) out32[i] = blank;
+        return;
+    }
+
+    // CRTC Offset (CR13) in words -> dword stride
+    uint32_t stride = (gfx_line_offset > 0) ? ((uint32_t)gfx_line_offset * 2u) : 80u;
+
+    uint32_t base;
+    // frame_line_compare is in display-line units (same as `line` parameter).
+    // Compare against `line` (not src_line) to get the right split point.
+    if (frame_line_compare >= 0 && (int)line >= frame_line_compare) {
+        uint32_t lc_src = (gfx_height > 200) ? (uint32_t)frame_line_compare
+                                               : (uint32_t)frame_line_compare >> 1;
+        base = (src_line - lc_src) * stride;
+    } else {
+        base = frame_vram_offset + src_line * stride;
+    }
+    base &= 0xFFFF;
+
+    // base is in dwords; gfx_buffer is bytes, so byte offset = base * 4
+    const uint32_t *src32 = (const uint32_t *)(gfx_buffer + base * 4);
+    // Select dither phase per scanline
+    uint16_t *active_palette = (src_line & 1) ? palette_a : palette_b;
+    // 320 pixels -> 80 dwords -> 160 output dwords (640px doubled)
+    for (int i = 0; i < 80; i++) {
+        uint32_t pixels = src32[i];
+        uint16_t p0 = active_palette[pixels & 0xFF];
+        uint16_t p1 = active_palette[(pixels >> 8) & 0xFF];
+        uint16_t p2 = active_palette[(pixels >> 16) & 0xFF];
+        uint16_t p3 = active_palette[(pixels >> 24) & 0xFF];
+        *out32++ = (uint32_t)p0 | ((uint32_t)p1 << 16);
+        *out32++ = (uint32_t)p2 | ((uint32_t)p3 << 16);
+    }
+}
+
 // Render graphics line directly from SRAM framebuffer (for IRQ use)
 // Uses dithered 16-bit palette for ~2197 perceived colors
 static void __time_critical_func(render_gfx_line_from_sram)(uint32_t line, uint32_t *output_buffer) {
-    uint32_t *out32 = output_buffer + SHIFT_PICTURE / 4;
+    uint32_t *out32 = (uint32_t *)((uint8_t *)output_buffer + SHIFT_PICTURE);
 
     // Determine source line based on graphics height
     // If height > 200 (e.g. 400 in Mode X), map 1:1
@@ -282,20 +348,30 @@ static void __time_critical_func(render_gfx_line_from_sram)(uint32_t line, uint3
             *out32++ = (TMPL_LINE) | (TMPL_LINE << 8) | (TMPL_LINE << 16) | (TMPL_LINE << 24);
         }
     } else {
-        // Read from display buffer (stable during active video)
-        // 320 pixels = 320 bytes. Stride is 320.
-        const uint32_t *src32 = (const uint32_t *)(gfx_display_buffer + (src_line * 320));
+        // Read from VRAM (stable during active video)
+        // Stride comes from CRTC Offset (CR13) which is in words for VGA.
+        // We use 32-bit words for fetch, so convert words->dwords.
+        uint32_t stride = (gfx_line_offset > 0) ? ((uint32_t)gfx_line_offset * 2u) : 80u;
+        uint32_t offset;
+        if (frame_line_compare >= 0 && src_line >= (uint32_t)frame_line_compare) {
+            offset = (src_line - frame_line_compare) * stride;
+        } else {
+            offset = frame_vram_offset + src_line * stride;
+        }
 
-        // Each pixel outputs 16 bits (2 bytes) of dithered color
-        // Low byte = c_hi (conv0), high byte = c_lo (conv1)
-        // This creates spatial dithering for ~2197 perceived colors
+        offset &= 0xFFFF;
+
+        // offset is in dwords; gfx_buffer is bytes, so byte offset = offset * 4
+        const uint32_t *src32 = (const uint32_t *)(gfx_buffer + offset * 4);
+        // Select dither phase per scanline
+        uint16_t *active_palette = (src_line & 1) ? palette_a : palette_b;
+        // 320 pixels -> 80 dwords
         for (int i = 0; i < 80; i++) {
             uint32_t pixels = src32[i];
             uint16_t p0 = active_palette[pixels & 0xFF];
             uint16_t p1 = active_palette[(pixels >> 8) & 0xFF];
             uint16_t p2 = active_palette[(pixels >> 16) & 0xFF];
-            uint16_t p3 = active_palette[pixels >> 24];
-            // Each pixel outputs 16 bits (dithered pair): 4 pixels = 8 bytes = 2 x uint32_t
+            uint16_t p3 = active_palette[(pixels >> 24) & 0xFF];
             *out32++ = (uint32_t)p0 | ((uint32_t)p1 << 16);
             *out32++ = (uint32_t)p2 | ((uint32_t)p3 << 16);
         }
@@ -305,7 +381,7 @@ static void __time_critical_func(render_gfx_line_from_sram)(uint32_t line, uint3
 // Render CGA 4-color graphics line (320x200, 2 bits per pixel, interleaved)
 // VGA stores CGA data in odd/even mode with interleaved planes
 static void __time_critical_func(render_gfx_line_cga)(uint32_t line, uint32_t *output_buffer) {
-    uint32_t *out32 = output_buffer + SHIFT_PICTURE / 4;
+    uint32_t *out32 = (uint32_t *)((uint8_t *)output_buffer + SHIFT_PICTURE);
 
     // CGA 320x200 mode (doubled to 640x400)
     uint32_t src_line = line / 2;
@@ -320,9 +396,15 @@ static void __time_critical_func(render_gfx_line_cga)(uint32_t line, uint32_t *o
         // Odd lines (1,3,5,...) at offset 0x2000
         uint32_t cga_bank = (src_line & 1) ? 0x2000 : 0x0000;
         uint32_t cga_row = src_line >> 1;  // Which row within bank (0-99)
-        uint32_t cga_line_offset = cga_bank + cga_row * 80;
+        uint32_t cga_line_offset;
+        if (frame_line_compare >= 0 && src_line >= (uint32_t)frame_line_compare) {
+            cga_line_offset = cga_bank + (src_line - frame_line_compare) * 80;
+        } else {
+            cga_line_offset = frame_vram_offset + cga_bank + cga_row * 80;
+        }
+        cga_line_offset &= 0xFFFF;
 
-        const uint8_t *src = gfx_display_buffer;
+        const uint8_t *src = gfx_buffer;
 
         // In CGA/odd-even mode, data is stored linearly in planes 0 and 1
         // Even bytes go to plane 0, odd bytes go to plane 1
@@ -353,7 +435,7 @@ static void __time_critical_func(render_gfx_line_cga)(uint32_t line, uint32_t *o
 // Memory layout: planar (4 bytes per screen byte), plane 0 only contains data
 // Row interleaving: even rows at bank 0, odd rows at bank 1 (0x2000 offset)
 static void __time_critical_func(render_gfx_line_cga2)(uint32_t line, uint32_t *output_buffer) {
-    uint32_t *out32 = output_buffer + SHIFT_PICTURE / 4;
+    uint32_t *out32 = (uint32_t *)((uint8_t *)output_buffer + SHIFT_PICTURE);
 
     // CGA 640x200 mode (doubled to 640x400)
     uint32_t src_line = line / 2;
@@ -371,9 +453,15 @@ static void __time_critical_func(render_gfx_line_cga2)(uint32_t line, uint32_t *
         uint32_t row_in_bank = src_line >> 1;  // Which row within bank (0-99)
         // Base address for this scanline (in bytes): bank + row * 80 bytes/row
         // In planar layout: multiply by 4 to get actual byte offset
-        uint32_t base_addr = (bank_offset + row_in_bank * 80) * 4;
-
-        const uint8_t *src = gfx_display_buffer;
+        uint32_t offset;
+        if (frame_line_compare >= 0 && src_line >= (uint32_t)frame_line_compare) {
+            offset = bank_offset + (src_line - frame_line_compare) * 80;
+        } else {
+            offset = frame_vram_offset + bank_offset + row_in_bank * 80;
+        }
+        offset &= 0xFFFF;
+        uint32_t base_addr = offset * 4;
+        const uint8_t *src = gfx_buffer;
 
         // CGA 2-color palette: 0 = black, 1 = white (or foreground color)
         uint8_t bg = cga_palette[0];  // Background (black)
@@ -425,7 +513,7 @@ static inline uint32_t ega_pack8_from_planes(const uint32_t ega_planes) {
 // Supports both 320x200 (doubled) and 640x350 (native) modes
 // Reads from SRAM buffer (copied from PSRAM during main loop)
 static void __time_critical_func(render_gfx_line_ega)(uint32_t line, uint32_t *output_buffer) {
-    uint32_t *out32 = output_buffer + SHIFT_PICTURE / 4;
+    uint32_t *out32 = (uint32_t *)((uint8_t *)output_buffer + SHIFT_PICTURE);
 
     // Determine if we need pixel doubling (for 320-wide modes)
     int double_pixels = (gfx_width <= 320);
@@ -464,14 +552,18 @@ static void __time_critical_func(render_gfx_line_ega)(uint32_t line, uint32_t *o
         }
         return;
     }
+    uint32_t stride = gfx_line_offset > 0 ? (gfx_line_offset * 2) : (gfx_width / 8);
 
-    // Snapshot display buffer pointer
-    const uint8_t *disp_buf = gfx_display_buffer;
+    uint32_t offset;
+    if (frame_line_compare >= 0 && src_line >= (uint32_t)frame_line_compare) {
+        offset = (src_line - frame_line_compare) * stride;
+    } else {
+        offset = frame_vram_offset + src_line * stride;
+    }
 
-    // Read from display buffer (stable during active video)
-    // Use calculated stride
-    const uint32_t *src32 = (const uint32_t *)disp_buf + (src_line * gfx_sram_stride);
+    offset &= 0xFFFF;
 
+    const uint32_t *src32 = (const uint32_t *)(gfx_buffer + offset * 4);
     int panning = frame_pixel_panning;
     int shift = panning * 4;
 
@@ -536,47 +628,233 @@ static void __time_critical_func(render_gfx_line_ega)(uint32_t line, uint32_t *o
     }
 }
 
+// 80 cols: one uint16 = 2 pixels (left in low byte, right in high byte)
+// 40 cols: need true 2x horizontal scaling per pixel: A B -> A A B B
+static inline void __time_critical_func(out16_2x_per_pixel)(uint16_t **pp, uint16_t v) {
+    uint16_t *p = *pp;
+    uint8_t a = (uint8_t)(v & 0xFF);
+    uint8_t b = (uint8_t)(v >> 8);
+    *p++ = (uint16_t)a | ((uint16_t)a << 8);  // A A
+    *p++ = (uint16_t)b | ((uint16_t)b << 8);  // B B
+    *pp = p;
+}
+
 // Helper function to render a single text line
 static void __time_critical_func(render_text_line)(uint32_t line, uint32_t *output_buffer) {
-    uint16_t *out16 = (uint16_t *)output_buffer + SHIFT_PICTURE / 2;
-    
+    uint16_t *out16 = (uint16_t *)((uint8_t *)output_buffer + SHIFT_PICTURE);
+
     uint32_t char_row = line / 16;
     uint32_t glyph_line = line & 15;
-    
+
+    int cols = text_cols;
+    int double_h = (cols == 40);  // 40 columns => 2x horizontal scaling
+
     if (char_row < 25) {
-        uint8_t *text_row = text_buffer_sram + char_row * 160;
-        
-        for (int col = 0; col < 80; col++) {
-            uint8_t ch = text_row[col * 2];
-            uint8_t attr = text_row[col * 2 + 1];
+        // Use snapped start address for the frame (prevents mid-frame tearing).
+        const uint32_t *base = (const uint32_t *)(gfx_buffer + ((uint32_t)frame_vram_offset << 2));
+        const uint32_t *text_row = base + (char_row * (uint32_t)text_stride_cells);
+
+        for (int col = 0; col < cols; col++) {
+            uint16_t cell = text_row[col];
+            uint8_t ch   = (uint8_t)(cell & 0xFF);
+            uint8_t attr = (uint8_t)(cell >> 8);
             uint8_t glyph = font_8x16[ch * 16 + glyph_line];
             uint16_t *pal = &txt_palette_fast[(attr & 0x7F) * 4];
-            
-            // Handle cursor
-            if (cursor_blink_state && col == cursor_x && 
+
+            if (cursor_blink_state && col == cursor_x &&
                 char_row == (uint32_t)cursor_y &&
-                glyph_line >= (uint32_t)cursor_start && 
+                glyph_line >= (uint32_t)cursor_start &&
                 glyph_line <= (uint32_t)cursor_end) {
                 glyph = 0xFF;
             }
-            
-            *out16++ = pal[glyph & 3];
-            *out16++ = pal[(glyph >> 2) & 3];
-            *out16++ = pal[(glyph >> 4) & 3];
-            *out16++ = pal[(glyph >> 6) & 3];
+
+            // 8px glyph -> 4x uint16 (каждый uint16 = 2 пикселя)
+            uint16_t v;
+            if (!double_h) {
+                v = pal[glyph & 3];           *out16++ = v;
+                v = pal[(glyph >> 2) & 3];    *out16++ = v;
+                v = pal[(glyph >> 4) & 3];    *out16++ = v;
+                v = pal[(glyph >> 6) & 3];    *out16++ = v;
+            } else {
+                // true per-pixel doubling: (A,B) -> (A,A,B,B)
+                v = pal[glyph & 3];           out16_2x_per_pixel(&out16, v);
+                v = pal[(glyph >> 2) & 3];    out16_2x_per_pixel(&out16, v);
+                v = pal[(glyph >> 4) & 3];    out16_2x_per_pixel(&out16, v);
+                v = pal[(glyph >> 6) & 3];    out16_2x_per_pixel(&out16, v);
+            }
         }
     }
 }
+#if DBG_OVERLAY
+// ============================================================================
+// Visual Debug Overlay
+// Draws a 16-pixel status bar at the top of the screen showing:
+//   - Colored block for mode (blue=text, green=gfx, red=blank)
+//   - Colored block for submode (width encodes value 0-9)
+//   - Colored block for palette_ok (dark/bright)
+//   - Colored block for vram_ok (dark/bright)
+//   - Frame counter as a scrolling brightness band
+// All output is in native format: TMPL_LINE | R2G2B2
+// ============================================================================
 
+// 4x5 mini-digits: each digit is 5 rows of 4 bits (MSB=left)
+static const uint8_t mini_digits[10][5] = {
+    {0b1110, 0b1010, 0b1010, 0b1010, 0b1110}, // 0
+    {0b0100, 0b1100, 0b0100, 0b0100, 0b1110}, // 1
+    {0b1110, 0b0010, 0b1110, 0b1000, 0b1110}, // 2
+    {0b1110, 0b0010, 0b1110, 0b0010, 0b1110}, // 3
+    {0b1010, 0b1010, 0b1110, 0b0010, 0b0010}, // 4
+    {0b1110, 0b1000, 0b1110, 0b0010, 0b1110}, // 5
+    {0b1110, 0b1000, 0b1110, 0b1010, 0b1110}, // 6
+    {0b1110, 0b0010, 0b0100, 0b0100, 0b0100}, // 7
+    {0b1110, 0b1010, 0b1110, 0b1010, 0b1110}, // 8
+    {0b1110, 0b1010, 0b1110, 0b0010, 0b1110}, // 9
+};
+
+static void __time_critical_func(render_vdbg_line)(uint32_t line, uint32_t *output_buffer) {
+    if (line >= 16) return;
+
+    uint8_t *out = (uint8_t *)output_buffer + SHIFT_PICTURE;
+
+    // Background: black with sync bits
+    uint8_t bg = TMPL_LINE;
+    for (int i = 0; i < 640; i++) out[i] = bg;
+
+    if (line == 0 || line == 15) {
+        // Top/bottom border: white line
+        uint8_t w = TMPL_LINE | 0x3F;
+        for (int i = 0; i < 640; i++) out[i] = w;
+        return;
+    }
+
+    // Row 1-14 (line 1..14): draw info blocks
+    uint32_t row = line - 1; // 0..13
+
+    // --- Block 0 (x=2..17): Mode indicator ---
+    // Shows current_mode as seen by the ISR renderer (not the requested mode)
+    // Blue = text (1), Green = graphics (2), Red = blank/other, Magenta = pending≠current
+    uint8_t mode_now = current_mode & 0xF;
+    uint8_t pend = (pending_mode >= 0) ? 1 : 0;
+    uint8_t mode_col;
+    if      (mode_now == 1 && !pend) mode_col = TMPL_LINE | 0x03;       // blue = text, settled
+    else if (mode_now == 1 &&  pend) mode_col = TMPL_LINE | 0x23;       // cyan-blue = text, pending change
+    else if (mode_now == 2) mode_col = TMPL_LINE | 0x0C;       // green = graphics
+    else                    mode_col = TMPL_LINE | 0x30;       // red = blank/other
+    for (int x = 2; x < 18; x++) out[x] = mode_col;
+
+    // --- Block 1 (x=20..35): Sub-mode + pending_mode indicator ---
+    // Left 8px: pending_mode value (0=none=dark, 1=bright, 2=green, etc)
+    // Right 8px: gfx_submode bar
+    uint8_t pend_col;
+    if      (pending_mode < 0)  pend_col = TMPL_LINE | 0x00; // black = no pending
+    else if (pending_mode == 1) pend_col = TMPL_LINE | 0x03; // blue = pending text
+    else if (pending_mode == 2) pend_col = TMPL_LINE | 0x0C; // green = pending gfx
+    else                        pend_col = TMPL_LINE | 0x30; // red = pending blank
+    for (int x = 20; x < 28; x++) out[x] = pend_col;
+
+    uint8_t sub = gfx_submode & 0xF;
+    uint8_t sub_dim  = TMPL_LINE | 0x08; // dark yellow
+    uint8_t sub_brt  = TMPL_LINE | 0x3C; // bright yellow
+    for (int x = 28; x < 38; x++) {
+        int seg = x - 28;
+        out[x] = (seg < (int)(sub * 2)) ? sub_brt : sub_dim;
+    }
+
+    // --- Block 2 (x=38..45): Palette OK ---
+    uint8_t pal_col = vdbg_palette_ok ? (TMPL_LINE | 0x3F) : (TMPL_LINE | 0x04);
+    for (int x = 38; x < 46; x++) out[x] = pal_col;
+
+    // --- Block 3 (x=48..55): VRAM write seen ---
+    uint8_t vram_col = vdbg_vram_ok ? (TMPL_LINE | 0x3F) : (TMPL_LINE | 0x04);
+    for (int x = 48; x < 56; x++) out[x] = vram_col;
+
+    // --- Block 4 (x=58..65): vblank state ---
+    uint8_t vbl_col = vdbg_vblank ? (TMPL_LINE | 0x30) : (TMPL_LINE | 0x03);
+    for (int x = 58; x < 66; x++) out[x] = vbl_col;
+
+    // --- Digits: show frame_vram_offset (6 hex digits) so we know where renderer reads ---
+    if (row >= 4 && row <= 8) {
+        uint32_t drow = row - 4;
+        // Show frame_vram_offset as 4 hex digits, then gfx_submode and gfx_line_offset
+        uint32_t val = ((uint32_t)frame_vram_offset << 16) |
+                       ((uint32_t)(gfx_submode & 0xF) << 8) |
+                       (uint32_t)(gfx_line_offset & 0xFF);
+        uint8_t hexdigits[6];
+        for (int d = 5; d >= 0; d--) {
+            hexdigits[d] = val & 0xF;
+            val >>= 4;
+        }
+        // Use mini_digits for 0-9, treat A-F as 0-9 too (close enough)
+        for (int d = 0; d < 6; d++) {
+            uint8_t bits = mini_digits[hexdigits[d] & 9][drow];
+            int x0 = 70 + d * 6;
+            for (int b = 0; b < 4; b++) {
+                uint8_t px = ((bits >> (3 - b)) & 1) ?
+                             (TMPL_LINE | 0x3F) :
+                             (TMPL_LINE | 0x00);
+                if (x0 + b < 640) out[x0 + b] = px;
+            }
+        }
+    }
+}
+#endif
 // Dispatch to appropriate renderer based on current mode
 static void __time_critical_func(render_line)(uint32_t line, uint32_t *output_buffer) {
+#if DBG_OVERLAY
+    // Visual debug overlay: always show status in top 16 scanlines
+    if (line < 16) {
+        render_vdbg_line(line, output_buffer);
+        return;
+    }
+#endif
+    // Check retrace and submit frame (fast path)
+    // We must check this frequently to catch the VBLANK edge
+    static bool was_in_retrace = false;
+    bool in_retrace = vga_in_retrace(vga_state);
+    // Latch values at the END of retrace (falling edge of VBLANK)
+    if (was_in_retrace && !in_retrace) {
+        // Text geometry:
+        // - visible cols from CRTC 0x01 (40/80)
+        // - stride in cells from CRTC 0x13 (offset) * 2
+        int cols = vga_get_text_cols(vga_state);
+        int cr13 = vga_get_line_offset(vga_state);   // CRTC offset register
+        int stride_cells = cr13 * 2;
+        vga_hw_submit_text_geom(cols, stride_cells);
+    }
+    was_in_retrace = in_retrace;
+
+
+    // --- Верхнее поле ---
+    if (line < ACTIVE_START) {
+        uint32_t blank = TMPL_LINE | (TMPL_LINE<<8) | (TMPL_LINE<<16) | (TMPL_LINE<<24);
+        uint32_t *out32 = (uint32_t *)((uint8_t *)output_buffer + SHIFT_PICTURE);
+        for (int i = 0; i < 160; i++)
+            out32[i] = blank;
+        return;
+    }
+
+    // --- Нижнее поле ---
+    if (line >= ACTIVE_END) {
+        uint32_t blank = TMPL_LINE | (TMPL_LINE<<8) | (TMPL_LINE<<16) | (TMPL_LINE<<24);
+        uint32_t *out32 = (uint32_t *)((uint8_t *)output_buffer + SHIFT_PICTURE);
+        for (int i = 0; i < 160; i++)
+            out32[i] = blank;
+        return;
+    }
+
+    // --- Активная зона 640×400 ---
+    line -= ACTIVE_START;
     // If OSD is visible, it takes over the display completely
     // (it reuses text_buffer_sram so we can't render normal text)
     if (osd_is_visible()) {
         osd_render_line(line, output_buffer);
         return;
     }
-
+    if (current_mode == 1) {
+        // Text mode now rendered from linear framebuffer
+        render_text_line(line, output_buffer);
+        return;
+    }
     if (current_mode == 2) {
         // Graphics mode - choose renderer based on submode
         if (gfx_submode == 1) {
@@ -588,13 +866,67 @@ static void __time_critical_func(render_line)(uint32_t line, uint32_t *output_bu
         } else if (gfx_submode == 4) {
             // CGA 2-color (640x200 monochrome)
             render_gfx_line_cga2(line, output_buffer);
+        } else if (gfx_submode == 5) {
+            // VGA 256-color planar (Mode X)
+            render_gfx_line_vga_planar256(line, output_buffer);
         } else {
             // VGA 256-color (mode 13h) - default
             render_gfx_line_from_sram(line, output_buffer);
         }
+        return;
+    }
+    // mode 0 = blanked (AR bit5 cleared during BIOS mode transitions).
+    // Emit black pixels with sync bits so the monitor sees a valid signal.
+    uint32_t *out32 = (uint32_t *)((uint8_t *)output_buffer + SHIFT_PICTURE);
+    uint32_t blank = TMPL_LINE | (TMPL_LINE << 8) | (TMPL_LINE << 16) | (TMPL_LINE << 24);
+    for (int i = 0; i < 160; i++) out32[i] = blank;
+}
+
+static inline void vga_hw_set_mode(int mode);
+
+static void __time_critical_func(vga_hw_new_frame)(void) {
+    static int last_vga_mode = -1;
+    // Update cursor
+    int cx, cy, cs, ce, cv;
+    vga_get_cursor_info(vga_state, &cx, &cy, &cs, &ce, &cv);
+    int char_height = vga_get_char_height(vga_state);
+    if (cv) {
+        vga_hw_set_cursor(cx, cy, cs, ce, char_height);
+        // Sync cursor blink phase with emulator
+        cursor_blink_state = vga_get_cursor_blink_phase(vga_state);
     } else {
-        // Text mode
-        render_text_line(line, output_buffer);
+        vga_hw_set_cursor(-1, -1, 0, 0, 16);  // Hide cursor
+    }
+
+    // Update VGA mode
+    int vga_mode = vga_get_mode(vga_state);
+    if (vga_mode != last_vga_mode) {
+        vga_hw_set_mode(vga_mode);
+        last_vga_mode = vga_mode;
+    }
+
+    // Update palette and graphics submode for graphics modes
+    if (vga_mode == 2) {
+        // Only update palette when it actually changed
+        if (vga_is_palette_dirty(vga_state)) {
+            vga_hw_set_palette(vga_get_palette(vga_state));
+        }
+
+        int gfx_w, gfx_h;
+        int gfx_submode = vga_get_graphics_mode(vga_state, &gfx_w, &gfx_h);
+        int line_offset = vga_get_line_offset(vga_state);
+        static int last_submode = -1;
+        if (gfx_submode != last_submode) {
+            last_submode = gfx_submode;
+        }
+        vga_hw_set_gfx_mode(gfx_submode, gfx_w, gfx_h, line_offset);
+
+        // For EGA mode, also update the 16-color palette
+        if (gfx_submode == 2) {
+            uint8_t ega_pal[48];
+            vga_get_palette16(vga_state, ega_pal);
+            vga_hw_set_palette16(ega_pal);
+        }
     }
 }
 
@@ -605,43 +937,44 @@ static void __isr __time_critical_func(dma_handler_vga)(void) {
     if (current_line >= N_LINES_TOTAL) {
         current_line = 0;
         frame_count++;
-        // Note: cursor_blink_state is now set externally via vga_hw_set_cursor_blink()
+        vga_hw_new_frame();
     }
     
     in_vblank = (current_line >= N_LINES_VISIBLE);
-    
-    // Allow copy during entire vblank period
     gfx_copy_allowed = in_vblank;
-    
-    // At start of vblank (end of active video), swap buffers if write is done
+
+    // Update VGA status register 1 (port 0x3DA) from ISR — this is the
+    // authoritative source. Core0 reads it as-is without any logic.
+    // Bit 0 (DISP_ENABLE): 1 = active display, 0 = blanking interval
+    // Bit 3 (V_RETRACE):   1 = vertical retrace, 0 = active display
+    if (vga_state) {
+        if (in_vblank) {
+            vga_state->st01 |=  ST01_V_RETRACE;
+            vga_state->st01 &= ~ST01_DISP_ENABLE;
+        } else {
+            vga_state->st01 &= ~ST01_V_RETRACE;
+            vga_state->st01 |=  ST01_DISP_ENABLE;
+        }
+    }
+
+    // Line N_LINES_VISIBLE (400): start of vblank.
+    // Apply pending mode/geometry changes. Do NOT latch vram_offset here —
+    // Wolf3D writes the new CRTC start address during vblank, after this point.
     if (current_line == N_LINES_VISIBLE) {
-        // Apply pending mode change during vblank (safe time to switch)
+        if (text_geom_pending) {
+            text_cols        = pending_text_cols;
+            text_stride_cells = pending_text_stride;
+            text_geom_pending = 0;
+        }
         if (pending_mode >= 0) {
             current_mode = pending_mode;
             pending_mode = -1;
         }
-
         if (gfx_write_done) {
-            // Only update frame parameters when we actually swap the buffer!
-            // This ensures panning and line_compare match the frame content.
-            frame_pixel_panning = pixel_panning;
-            frame_line_compare = line_compare;
-
-            uint8_t *tmp = gfx_display_buffer;
-            gfx_display_buffer = gfx_write_buffer;
-            gfx_write_buffer = tmp;
             gfx_write_done = 0;
         }
-
-        // Swap palette if dirty
-        if (palette_dirty) {
-            uint16_t *tmp = active_palette;
-            active_palette = pending_palette;
-            pending_palette = tmp;
-            palette_dirty = false;
-        }
     }
-    
+
     // Vertical blanking region
     if (current_line >= N_LINES_VISIBLE) {
         if (current_line >= LINE_VS_BEGIN && current_line <= LINE_VS_END) {
@@ -649,9 +982,20 @@ static void __isr __time_critical_func(dma_handler_vga)(void) {
         } else {
             dma_channel_set_read_addr(dma_ctrl_chan, &lines_pattern[0], false);
         }
-        
-        // Pre-render first few lines late in vblank (buffers already swapped)
+
+        // Line N_LINES_TOTAL-4 (521): late in vblank, just before DMA needs line 0.
+        // Wolf3D has already written the new page address to CRTC by now.
+        // Read cr[] and ar[] directly — no intermediate volatile copies.
         if (current_line == N_LINES_TOTAL - 4) {
+            if (vga_state) {
+                const uint8_t *cr = vga_state->cr;
+                frame_vram_offset = (uint16_t)((cr[0x0c] << 8) | cr[0x0d]);
+                frame_pixel_panning = vga_state->ar[0x13] & 0x07;
+                int lc = (int)cr[0x18]
+                       | (((int)cr[0x07] & 0x10) << 4)
+                       | (((int)cr[0x09] & 0x40) << 3);
+                frame_line_compare = (lc > 0 && lc < N_LINES_VISIBLE) ? lc : -1;
+            }
             render_line(0, lines_pattern[2]);
             render_line(1, lines_pattern[3]);
             render_line(2, lines_pattern[4]);
@@ -684,11 +1028,11 @@ void vga_hw_init(void) {
 
     init_palettes();
 
-    // Calculate clock divider for 25.175 MHz pixel clock
+    // Calculate clock divider
     float sys_clk = (float)clock_get_hz(clk_sys);
-    float clk_div = sys_clk / 25175000.0f;
+    float clk_div = sys_clk / VGA_CLK;
 
-    DBG_PRINT("  System clock: %.1f MHz\n", sys_clk / 1e6);
+    DBG_PRINT("  System clock: %.1f MHz\n", sys_clk / 1e6f);
     DBG_PRINT("  Clock divider: %.4f\n", clk_div);
     
     // Allocate line pattern buffers (6 buffers: 2 sync + 4 active)
@@ -719,10 +1063,6 @@ void vga_hw_init(void) {
     // Initialize PIO
     uint offset = pio_add_program(VGA_PIO, &pio_vga_program);
     vga_sm = pio_claim_unused_sm(VGA_PIO, true);
-    
-    // Initialize spin lock for frame state synchronization
-    int lock_num = spin_lock_claim_unused(true);
-    vga_state_lock = spin_lock_init(lock_num);
     
     // Configure GPIO pins
     for (int i = 0; i < 8; i++) {
@@ -798,18 +1138,22 @@ void vga_hw_init(void) {
     DBG_PRINT("  VGA started (640x400 text mode, IRQ priority=0x00)!\n");
 }
 
-void vga_hw_set_vram(uint8_t *vram) {
-    vga_ram_psram = vram;
-}
-
-void vga_hw_set_mode(int mode) {
+static inline void vga_hw_set_mode(int mode) {
+    // Ignore mode 0 (blank): this is a transient state the BIOS sets
+    // while reprogramming registers during mode switches.  If we apply
+    // it we permanently black out the display until the next reboot.
+    // The render_line() fallback already outputs a valid blank scanline
+    // for current_mode==0 so the monitor signal stays clean.
+    if (mode == 0) return;
+    // Update visual debug: mode in high nibble, keep submode in low nibble
+    vdbg_mode_sub = (uint8_t)((mode << 4) | (vdbg_mode_sub & 0xF));
     if (mode != current_mode) {
         // Defer mode change to vblank to prevent signal glitches
         pending_mode = mode;
     }
 }
 
-void vga_hw_set_cursor(int x, int y, int start, int end, int char_height) {
+void __time_critical_func(vga_hw_set_cursor)(int x, int y, int start, int end, int char_height) {
     cursor_x = x;
     cursor_y = y;
     // Scale cursor scanlines from emulated char_height to our 16-line font
@@ -826,42 +1170,14 @@ void vga_hw_set_cursor(int x, int y, int start, int end, int char_height) {
     }
 }
 
-void vga_hw_set_cursor_blink(int blink_phase) {
-    cursor_blink_state = blink_phase;
-}
+// These setters are no longer used — ISR reads VGA registers directly.
+// Kept as stubs so any remaining callers still compile.
+void vga_hw_set_vram_offset(uint16_t offset)  { (void)offset; }
+void vga_hw_set_panning(uint8_t panning)       { (void)panning; }
+void vga_hw_set_line_compare(int line)          { (void)line; }
 
-void vga_hw_set_vram_offset(uint16_t offset) {
-    vram_offset = offset;
-}
-
-void vga_hw_set_panning(uint8_t panning) {
-    pixel_panning = panning & 7;
-}
-
-void vga_hw_set_line_compare(int line) {
-    line_compare = line;
-}
-
-// Pending frame state (submitted by Core 0)
-static volatile bool new_frame_pending = false;
-static volatile uint16_t pending_start_addr = 0;
-static volatile uint8_t pending_panning = 0;
-static volatile int pending_line_compare = -1;
-
-void vga_hw_submit_frame(uint16_t start_addr, uint8_t panning, int line_compare) {
-    if (vga_state_lock) {
-        uint32_t flags = spin_lock_blocking(vga_state_lock);
-        pending_start_addr = start_addr;
-        pending_panning = panning;
-        pending_line_compare = line_compare;
-        new_frame_pending = true;
-        spin_unlock(vga_state_lock, flags);
-    } else {
-        pending_start_addr = start_addr;
-        pending_panning = panning;
-        pending_line_compare = line_compare;
-        new_frame_pending = true;
-    }
+void vga_hw_set_vga_state(VGAState *s) {
+    vga_state = s;
 }
 
 // Update palette from emulator's 6-bit VGA DAC values
@@ -872,14 +1188,14 @@ void vga_hw_set_palette(const uint8_t *palette_data) {
         uint8_t r6 = palette_data[i * 3 + 0];
         uint8_t g6 = palette_data[i * 3 + 1];
         uint8_t b6 = palette_data[i * 3 + 2];
-        pending_palette[i] = vga_color_to_dithered(r6, g6, b6);
+        vga_color_to_dithered(r6, g6, b6, i);
     }
-    palette_dirty = true;
+    vdbg_palette_ok = 1;
 }
 
 // Update EGA 16-color palette from AC palette registers
 // palette16_data is 48 bytes (16 entries × 3 bytes RGB, each 0-63)
-void vga_hw_set_palette16(const uint8_t *palette16_data) {
+void __time_critical_func(vga_hw_set_palette16)(const uint8_t *palette16_data) {
     for (int i = 0; i < 16; i++) {
         uint8_t r6 = palette16_data[i * 3 + 0];
         uint8_t g6 = palette16_data[i * 3 + 1];
@@ -889,200 +1205,36 @@ void vga_hw_set_palette16(const uint8_t *palette16_data) {
 }
 
 // Set graphics sub-mode: 1=CGA 4-color, 2=EGA planar, 3=VGA 256-color, 4=CGA 2-color
-void vga_hw_set_gfx_mode(int submode, int width, int height, int line_offset) {
+void __time_critical_func(vga_hw_set_gfx_mode)(int submode, int width, int height, int line_offset) {
+    vdbg_mode_sub = (uint8_t)((2 << 4) | (submode & 0xF));
     gfx_submode = submode;
     gfx_width = width;
     gfx_height = height;
     gfx_line_offset = line_offset > 0 ? line_offset : (width / 8);
     gfx_sram_stride = (width / 8) + 1;
+
+    // Probe: show actual gfx_buffer contents - first 320 bytes as raw colors
+    // This fires once after mode is set, showing what Wolf3D wrote (or didn't)
+    {
+        static int _filled = 0;
+        if (!_filled) {
+            _filled = 1;
+            // Fill with 0xAA so we can distinguish "never written" from "written to 0"
+            memset(gfx_buffer, 0xAA, sizeof(gfx_buffer));
+        }
+    }
 }
 
 // Call this from main loop to update the SRAM buffers from PSRAM
 // For text mode: copies text buffer during vblank
 // For graphics mode: pre-renders scanlines ahead of the beam
 void vga_hw_update(void) {
-    if (!vga_ram_psram) return;
-
     // Don't update text buffer when OSD is visible (it reuses the same buffer)
     if (osd_is_visible()) return;
-
-    if (current_mode == 1) {
-        // Text mode: only copy text buffer once per frame during vblank
-        static uint32_t last_text_frame = 0;
-        uint32_t cur_frame = frame_count;
-        if (cur_frame == last_text_frame) return;  // Already updated this frame
-
-        // Wait for vblank with timeout
-        if (!in_vblank) return;  // Not in vblank yet, try again later
-
-        last_text_frame = cur_frame;
-
-        // In tiny386 VGA, text mode uses odd/even plane interleaving
-        uint8_t *src = vga_ram_psram + (vram_offset * 4);
-        uint32_t *src32 = (uint32_t *)src;
-        uint16_t *dst16 = (uint16_t *)text_buffer_sram;
-
-        for (int i = 0; i < 80 * 25; i++) {
-            uint32_t val = src32[i];
-            dst16[i] = (uint16_t)(val & 0xFFFF);
-        }
-
-    } else if (current_mode == 2) {
-        // Graphics mode: copy visible portion from PSRAM to SRAM
-        // Only copy when a new frame has been submitted by the emulator
-        
-        bool should_update = false;
-        if (vga_state_lock) {
-            uint32_t flags = spin_lock_blocking(vga_state_lock);
-            if (new_frame_pending && !in_vblank) {
-                // Apply pending registers atomically
-                vram_offset = pending_start_addr;
-                pixel_panning = pending_panning & 7;
-                line_compare = pending_line_compare;
-                new_frame_pending = false; // Frame processed
-                should_update = true;
-            }
-            spin_unlock(vga_state_lock, flags);
-        } else {
-            if (new_frame_pending && !in_vblank) {
-                vram_offset = pending_start_addr;
-                pixel_panning = pending_panning & 7;
-                line_compare = pending_line_compare;
-                new_frame_pending = false;
-                should_update = true;
-            }
-        }
-
-        if (should_update) {
-            
-            // Use snapshotted offset for entire copy
-            uint16_t copy_offset = vram_offset;
-            int split_line = line_compare;
-            
-            const uint32_t *src = (const uint32_t *)vga_ram_psram;
-            uint32_t *dst = (uint32_t *)gfx_write_buffer;
-            
-            if (gfx_submode == 1 || gfx_submode == 4) {
-                // CGA 4-color or 2-color: copy 32KB (same memory layout)
-                memcpy(dst, src, GFX_BUFFER_SIZE);
-                gfx_prerender_count += 200;
-            } else if (gfx_submode == 2) {
-                // EGA planar: copy only visible lines (compact, no stride gap)
-                // 320x200: 40 words/line * 200 lines = 8000 words = 32KB
-                int display_words = gfx_width / 8;  // 40 for 320px, 80 for 640px
-                int sram_stride = gfx_sram_stride;
-                int stride = gfx_line_offset > 0 ? (gfx_line_offset * 2) : display_words; // stride in words
-                int height = gfx_height > 0 ? gfx_height : 200;
-                
-                // Cap height to fit in buffer
-                int max_height = GFX_BUFFER_SIZE / (sram_stride * 4);
-                if (height > max_height) height = max_height;
-                
-                // Copy visible lines compactly to SRAM buffer
-                // Handle Line Compare (Split Screen)
-                // If y >= split_line, address resets to 0
-                
-                // Pre-calculate source pointers
-                const uint32_t *ega_src_scrolled = src + copy_offset;
-                const uint32_t *ega_src_fixed = src; // Address 0
-                
-                for (int y = 0; y < height; y++) {
-                    const uint32_t *line_src;
-                    
-                    // Check for split screen
-                    // Note: split_line is 0-based scanline. If split_line=0, all lines are fixed?
-                    // Usually split_line is > 0. If y >= split_line, use fixed address.
-                    // BUT, the fixed address starts at 0 relative to the split point?
-                    // No, VGA hardware resets address counter to 0 when line counter == Line Compare.
-                    // So the line AT split_line is drawn from address 0.
-                    // The line AT split_line+1 is drawn from address 0 + stride.
-                    
-                    if (split_line >= 0 && y >= split_line) {
-                        // Fixed area (usually bottom status bar)
-                        // Address starts at 0 for the first line of the split area
-                        int split_y = y - split_line;
-                        line_src = ega_src_fixed + split_y * stride;
-                    } else {
-                        // Scrolled area (usually top)
-                        line_src = ega_src_scrolled + y * stride;
-                    }
-                    
-                    // Wrap address to 64KB words (256KB bytes) to prevent reading garbage
-                    // We can't easily wrap the pointer, but we can wrap the offset if we calculated it manually.
-                    // Let's re-calculate with wrapping.
-                    
-                    uint32_t offset;
-                    if (split_line >= 0 && y >= split_line) {
-                        offset = (y - split_line) * stride;
-                    } else {
-                        offset = copy_offset + y * stride;
-                    }
-                    offset &= 0xFFFF; // Wrap at 64KB words
-                    
-                    // Handle VRAM wrap-around for the copy itself
-                    // If offset + sram_stride > 0x10000, we need to split the copy
-                    if (offset + sram_stride > 0x10000) {
-                        uint32_t first_part = 0x10000 - offset;
-                        uint32_t second_part = sram_stride - first_part;
-                        
-                        memcpy(dst + y * sram_stride, src + offset, first_part * 4);
-                        memcpy(dst + y * sram_stride + first_part, src, second_part * 4);
-                    } else {
-                        memcpy(dst + y * sram_stride, src + offset, sram_stride * 4);
-                    }
-                }
-                gfx_prerender_count += 200;
-            } else {
-                // VGA 256-color (mode 13h / Mode X)
-                // 320x200: 80 words/line * 200 lines = 16000 words = 64KB
-                
-                int stride = 80; // 320 pixels / 4 pixels per word
-                int height = gfx_height > 0 ? gfx_height : 200;
-                
-                // Cap height
-                int max_height = GFX_BUFFER_SIZE / (stride * 4);
-                if (height > max_height) height = max_height;
-                
-                for (int y = 0; y < height; y++) {
-                    uint32_t offset;
-                    
-                    // Handle Split Screen
-                    if (split_line >= 0 && y >= split_line) {
-                        offset = (y - split_line) * stride;
-                    } else {
-                        offset = copy_offset + y * stride;
-                    }
-                    offset &= 0xFFFF; // Wrap at 64KB words (256KB bytes)
-                    
-                    // Handle VRAM wrap-around
-                    if (offset + stride > 0x10000) {
-                        uint32_t first_part = 0x10000 - offset;
-                        uint32_t second_part = stride - first_part;
-                        
-                        memcpy(dst + y * stride, src + offset, first_part * 4);
-                        memcpy(dst + y * stride + first_part, src, second_part * 4);
-                    } else {
-                        memcpy(dst + y * stride, src + offset, stride * 4);
-                    }
-                }
-                gfx_prerender_count += 200;
-            }
-            
-            gfx_write_done = 1;  // Signal buffer swap at next vblank
-        }
-    }
 }
 
 uint32_t vga_hw_get_frame_count(void) {
     return frame_count;
-}
-
-// Debug: get graphics pre-render stats
-void vga_hw_get_gfx_stats(uint32_t *prerender, uint32_t *fallback) {
-    *prerender = gfx_prerender_count;
-    *fallback = gfx_fallback_count;
-    gfx_prerender_count = 0;
-    gfx_fallback_count = 0;
 }
 
 // Legacy API for compatibility

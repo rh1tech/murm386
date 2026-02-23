@@ -31,6 +31,9 @@ typedef enum {
     SETTING_PCSPEAKER,
     SETTING_ADLIB,
     SETTING_SOUNDBLASTER,
+    SETTING_TANDY,
+    SETTING_COVOX,
+    SETTING_DSS,
     SETTING_MOUSE,
     SETTING_CPU_FREQ,
     SETTING_PSRAM_FREQ,
@@ -59,7 +62,7 @@ static int plasma_frame = 0;  // Animation frame counter
 
 // Original values (to detect changes)
 static int orig_mem, orig_cpu, orig_fpu, orig_fill_cmos;
-static int orig_pcspeaker, orig_adlib, orig_soundblaster, orig_mouse;
+static int orig_pcspeaker, orig_adlib, orig_soundblaster, orig_tandy, orig_covox, orig_dss, orig_mouse;
 static int orig_cpu_freq, orig_psram_freq;
 
 // UI dimensions
@@ -91,6 +94,9 @@ void settingsui_open(void) {
     orig_pcspeaker = config_get_pcspeaker();
     orig_adlib = config_get_adlib();
     orig_soundblaster = config_get_soundblaster();
+    orig_tandy = config_get_tandy();
+    orig_covox = config_get_covox();
+    orig_dss = config_get_dss();
     orig_mouse = config_get_mouse();
     orig_cpu_freq = config_get_cpu_freq();
     orig_psram_freq = config_get_psram_freq();
@@ -113,6 +119,9 @@ void settingsui_close(void) {
         config_set_pcspeaker(orig_pcspeaker);
         config_set_adlib(orig_adlib);
         config_set_soundblaster(orig_soundblaster);
+        config_set_tandy(orig_tandy);
+        config_set_covox(orig_covox);
+        config_set_covox(orig_dss);
         config_set_mouse(orig_mouse);
         config_set_cpu_freq(orig_cpu_freq);
         config_set_psram_freq(orig_psram_freq);
@@ -182,6 +191,18 @@ static void cycle_option(int direction) {
             config_set_soundblaster(config_get_soundblaster() ? 0 : 1);
             break;
 
+        case SETTING_TANDY:
+            config_set_tandy(config_get_tandy() ? 0 : 1);
+            break;
+
+        case SETTING_COVOX:
+            config_set_covox(config_get_covox() ? 0 : 1);
+            break;
+
+        case SETTING_DSS:
+            config_set_dss(config_get_dss() ? 0 : 1);
+            break;
+
         case SETTING_MOUSE:
             config_set_mouse(config_get_mouse() ? 0 : 1);
             break;
@@ -222,6 +243,9 @@ static void draw_settings_menu(void) {
         "PC Speaker:",
         "AdLib:",
         "SoundBlaster:",
+        "Tandy Sound:",
+        "Covox (LPT2):",
+        "Disney Sound Source:",
         "Mouse:",
         "RP2350 Freq:",
         "PSRAM Freq:"
@@ -260,6 +284,15 @@ static void draw_settings_menu(void) {
                 break;
             case SETTING_SOUNDBLASTER:
                 snprintf(value, sizeof(value), "< %s >", config_get_soundblaster() ? "Enabled" : "Disabled");
+                break;
+            case SETTING_TANDY:
+                snprintf(value, sizeof(value), "< %s >", config_get_tandy() ? "Enabled" : "Disabled");
+                break;
+            case SETTING_COVOX:
+                snprintf(value, sizeof(value), "< %s >", config_get_covox() ? "Enabled" : "Disabled");
+                break;
+            case SETTING_DSS:
+                snprintf(value, sizeof(value), "< %s >", config_get_dss() ? "Enabled" : "Disabled");
                 break;
             case SETTING_MOUSE:
                 snprintf(value, sizeof(value), "< %s >", config_get_mouse() ? "Enabled" : "Disabled");
