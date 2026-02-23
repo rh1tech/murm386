@@ -76,7 +76,9 @@ uint8_t insertdisk(uint8_t drivenum, const char *pathname) {
     char path[256];
     snprintf(path, sizeof(path), "386/%s", pathname);
 
-    if (FR_OK != f_open(&file, path, FA_READ | FA_WRITE)) {
+    FRESULT fres = f_open(&file, path, FA_READ | FA_WRITE);
+    if (FR_OK != fres) {
+        printf("disk: cannot open '%s' (FatFS error %d)\n", path, fres);
         return 0;
     }
 
@@ -88,10 +90,12 @@ uint8_t insertdisk(uint8_t drivenum, const char *pathname) {
     if (is_vhd) {
         // Fixed VHD: subtract 512-byte footer
         usable_size -= 512;
+        printf("disk: '%s': VHD detected, data size %u bytes\n", pathname, (unsigned)usable_size);
     }
 
     // Validate size constraints
     if (usable_size < 360 * 1024 || usable_size > 0x1f782000UL || (usable_size & 511)) {
+        printf("disk: '%s': bad size %u (need 360K..528M, 512-aligned)\n", pathname, (unsigned)usable_size);
         f_close(&file);
         return 0;
     }
@@ -102,7 +106,27 @@ uint8_t insertdisk(uint8_t drivenum, const char *pathname) {
     if (drivenum >= 2) {  // Hard disk
         sects = 63;
         heads = 16;
-        cyls = usable_size / (sects * heads * 512);
+
+        // Try to detect geometry from MBR partition table.
+        // The end-CHS of the last partition entry encodes the heads
+        // and sectors-per-track the image was created with.
+        UINT br;
+        f_lseek(&file, 0);
+        if (FR_OK == f_read(&file, sectorbuffer, 512, &br) && br == 512
+            && sectorbuffer[510] == 0x55 && sectorbuffer[511] == 0xAA) {
+            for (int p = 0; p < 4; p++) {
+                uint8_t *pe = &sectorbuffer[0x1BE + p * 16];
+                if (pe[4] == 0) continue;          // empty slot
+                uint8_t end_h = pe[5];
+                uint8_t end_s = pe[6] & 0x3F;
+                if (end_s > 0 && end_h > 0) {
+                    heads = end_h + 1;
+                    sects = end_s;
+                }
+            }
+        }
+
+        cyls = usable_size / ((size_t)sects * heads * 512);
     } else {  // Floppy disk
         cyls = 80;
         sects = 18;
@@ -140,6 +164,10 @@ uint8_t insertdisk(uint8_t drivenum, const char *pathname) {
 
     // Track filename for disk UI
     disk_set_filename(drivenum, pathname);
+
+    printf("disk: '%s' -> drive %d (%s, %uC/%uH/%uS, %u KB)\n",
+           pathname, drivenum, drivenum >= 2 ? "HDD" : "FDD",
+           cyls, heads, sects, (unsigned)(usable_size / 1024));
 
     return 1;
 }
@@ -320,6 +348,12 @@ void diskhandler(CPUI386 *cpu) {
 
     disk_cpu = cpu;
     disk_mem = cpu_get_phys_mem(cpu);
+
+    // Keep BDA hard drive count in sync.  SeaBIOS discovers drives via
+    // ATA port probing (which we don't implement), so BDA 0x475 stays 0.
+    // Patching it here ensures DOS sees the correct count before it ever
+    // tries to access drive C:.
+    disk_mem[0x475] = hdcount;
 
     uint8_t drivenum = cpu_get_dl(cpu);
 
