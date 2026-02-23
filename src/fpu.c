@@ -329,7 +329,7 @@ static double fpround(double x, int rc)
 {
 	switch (rc) {
 	case 0:
-		return round(x);
+		return nearbyint(x);
 	case 1:
 		return floor(x);
 	case 2:
@@ -958,7 +958,7 @@ bool fpu_exec1(FPU *fpu, void *cpu, int op, int group, unsigned int i)
 			}
 			case 5: { // FPREM1
 				temp2 = fpget(fpu, 1);
-				int64_t q = round(temp / temp2); // TODO: overflow
+				int64_t q = nearbyint(temp / temp2); // TODO: overflow
 				fpset(fpu, 0, temp - q * temp2);
 				fpu->sw &= ~C2;
 				if (q & 1) fpu->sw |= C1; else fpu->sw &= ~C1;
@@ -990,6 +990,7 @@ bool fpu_exec1(FPU *fpu, void *cpu, int op, int group, unsigned int i)
 			case 1: // FYL2XP1
 				temp2 = fpget(fpu, 1);
 				fpset(fpu, 1, temp2 * log2(1.0 + temp));
+				fppop(fpu);
 				break;
 			case 2: // FSQRT
 				fpset(fpu, 0, sqrt(temp));

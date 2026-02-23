@@ -286,6 +286,10 @@ void __not_in_flash_func(i8254_update_irq)(PITState *pit)
 					pit->set_irq(pit->pic, s->irq, 0);
 				}
 				s->last_irq_count += s->count;
+				// avoid wraparound
+				if (uticks - s->count_load_time > (1u << 31)) {
+					pit_load_count(pit, s, s->count);
+				}
 				i++;
 			}
 		}
