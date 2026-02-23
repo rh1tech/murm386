@@ -1117,7 +1117,19 @@ static int __not_in_flash_func(vga_update_retrace)(VGAState *s)
 
 int __not_in_flash_func(vga_step)(VGAState *s)
 {
+#ifdef RP2350_BUILD
+    /* On RP2350, the DMA ISR in vga_hw.c updates st01 on every scanline
+     * with real display timing. Don't fight it with the timer-based
+     * retrace emulation — just detect the vblank rising edge from st01
+     * to trigger vga_refresh() for mode change processing. */
+    static int was_vblank = 0;
+    int is_vblank = (s->st01 & ST01_V_RETRACE) != 0;
+    int ret = (is_vblank && !was_vblank) ? 1 : 0;
+    was_vblank = is_vblank;
+    return ret;
+#else
     return vga_update_retrace(s);
+#endif
 }
 
 void __not_in_flash_func(vga_refresh)(VGAState *s,
