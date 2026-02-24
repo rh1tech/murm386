@@ -2445,7 +2445,8 @@ void __time_critical_func(vga_get_palette16)(VGAState *s, uint8_t *palette16)
 }
 
 /* Get detailed graphics mode information for hardware rendering
- * Returns: 0=text, 1=CGA, 2=EGA planar 16-color, 3=VGA 256-color (mode 13h)
+ * Returns: 0=text, 1=CGA 4-color, 2=EGA 16-color, 3=VGA 256-color (mode 13h),
+ *          4=CGA 2-color, 5=Mode X (VGA 256-color planar unchained)
  * Also fills in width, height if pointers are non-NULL
  */
 int __time_critical_func(vga_get_graphics_mode)(VGAState *s, int *width, int *height)
@@ -2471,63 +2472,50 @@ int __time_critical_func(vga_get_graphics_mode)(VGAState *s, int *width, int *he
     h++;
 
     // Handle double-scan and multi-scan for height calculation
-    // NOTE: We return the actual source data height, not display height.
-    // The hardware renderer handles vertical doubling itself.
     int double_scan = (s->cr[0x09] >> 7);
     int multi_scan = 1;
     if (shift_control != 1) {
         multi_scan = (((s->cr[0x09] & 0x1f) + 1) << double_scan);
     }
-    // Divide by multi_scan to get actual unique scanlines in VRAM
-    // (but only if multi_scan > 1, indicating each source line is scanned multiple times)
     if (multi_scan > 1) {
         h = (h + multi_scan - 1) / multi_scan;
     }
 
-    // For VGA 256-color mode (shift_control == 2), the CRTC width is doubled
-    // because the pixel clock is halved. Divide by 2 to get actual resolution.
+    // For VGA 256-color mode (shift_control == 2), CRTC width is doubled.
     if (shift_control == 2) {
         w = w / 2;
     }
 
-    if (width) *width = w;
+    if (width)  *width  = w;
     if (height) *height = h;
 
-    if (shift_control == 0) {
-        // Mode X (320x200 256-color planar, unchained)
-        // Wolf3D and many DOS games use this for page-flipping.
-        // Our VRAM model stores planar bytes as packed-planes dwords.
-        /// TODO: vga_planar_mode = !(vga.sequencer[4] & 8) || !(vga.sequencer[4] & 6);
-        if (!(s->sr[VGA_SEQ_MEMORY_MODE] & 0x04u) && (s->ar[0x10] & 0x40) && w == 320) {
-            return 5; // VGA 256-color planar (Mode X)
-        }
-        // Debug: print register values for 640-wide modes
-        static int debug_640 = 0;
-        if (w >= 640 && debug_640 < 3) {
-            printf("[VGA] 640-wide mode: shift=%d gr5=0x%02x gr6=0x%02x cr17=0x%02x\n",
-                   shift_control, s->gr[0x05], s->gr[0x06], s->cr[0x17]);
-            debug_640++;
-        }
-        // Check for CGA graphics modes (memory map = B8000-BFFFF, GR6 bits 2-3 = 11)
-        // Mode 6 uses shift_control=0 with CGA memory mapping
-        if ((s->gr[0x06] & 0x0C) == 0x0C && w >= 640) {
-            return 4;  // CGA 2-color (640x200 monochrome)
-        }
-        // Also check CR17 bit 0 - cleared for CGA compatibility modes
-        if (!(s->cr[0x17] & 0x01) && w >= 640) {
-            return 4;  // CGA 2-color (640x200 monochrome)
-        }
-        return 2;  // EGA planar 16-color
+    // -----------------------------------------------------------------------
+    // Mode X detection — check SR[4] BEFORE shift_control.
+    //
+    // Wolf3D calls VGAWRITEMODE(0/1/2) constantly, overwriting GR[5] bits 5-6
+    // (shift_control). SR[4] is set once by VL_DePlaneVGA and never changed.
+    //   VL_DePlaneVGA: SR[4] = (old & ~8) | 4  →  chain4=0 (bit3), seq=1 (bit2)
+    // -----------------------------------------------------------------------
+    int rv;
+    if (!(s->sr[VGA_SEQ_MEMORY_MODE] & VGA_SR04_CHN_4M) &&   /* chain4 OFF */
+         (s->sr[VGA_SEQ_MEMORY_MODE] & VGA_SR04_SEQ_MODE) &&  /* sequential ON */
+         (s->ar[0x10] & 0x40) &&                               /* 8-bit DAC color */
+         w == 320) {
+        rv = 5;  // Mode X
+    } else if (shift_control == 0) {
+        if ((s->gr[0x06] & 0x0C) == 0x0C && w >= 640)
+            rv = 4;  // CGA 2-color
+        else if (!(s->cr[0x17] & 0x01) && w >= 640)
+            rv = 4;  // CGA 2-color
+        else
+            rv = 2;  // EGA planar 16-color
     } else if (shift_control == 1) {
-        // CGA 4-color modes (320x200)
-        // Also check for 640-wide CGA 2-color in case shift_control varies
-        if (w >= 640) {
-            return 4;  // CGA 2-color (640x200 monochrome)
-        }
-        return 1;  // CGA 4-color (320x200)
+        rv = (w >= 640) ? 4 : 1;  // CGA 2- or 4-color
     } else {
-        return 3;  // VGA 256-color (mode 13h)
+        rv = 3;  // Mode 13h chain4 256-color
     }
+
+    return rv;
 }
 
 /* Get VGA line offset (bytes per scanline in video memory)
