@@ -288,6 +288,7 @@ static void __time_critical_func(render_gfx_line_vga_planar256)(uint32_t line, u
 
     int active_lines = active_end - active_start;
     uint32_t src_line = (gfx_height * 2 <= active_lines) ? (line >> 1) : line;
+
     if (src_line >= (uint32_t)gfx_height) {
         uint32_t blank = TMPL_LINE | (TMPL_LINE << 8) | (TMPL_LINE << 16) | (TMPL_LINE << 24);
         for (int i = 0; i < 160; i++) out32[i] = blank;
@@ -1229,17 +1230,6 @@ void __time_critical_func(vga_hw_set_gfx_mode)(int submode, int width, int heigh
     } else {
         active_start = DEFAULT_ACTIVE_START;
         active_end = DEFAULT_ACTIVE_END;
-    }
-
-    // Probe: show actual gfx_buffer contents - first 320 bytes as raw colors
-    // This fires once after mode is set, showing what Wolf3D wrote (or didn't)
-    {
-        static int _filled = 0;
-        if (!_filled) {
-            _filled = 1;
-            // Fill with 0xAA so we can distinguish "never written" from "written to 0"
-            memset(gfx_buffer, 0xAA, sizeof(gfx_buffer));
-        }
     }
 }
 

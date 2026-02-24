@@ -765,8 +765,13 @@ PC *pc_new(SimpleFBDrawFunc *redraw, void (*poll)(void *), void *redraw_data,
 
 	pc->boot_start_time = 0;
 
-	pc->vga_mem_size = conf->vga_mem_size;
-	pc->vga_mem = gfx_buffer; // TODO: if more than 256k?
+	/* gfx_buffer is always 256 KB — always use exactly that, ignoring
+	 * whatever vga_mem the config says.  This ensures Wolf3D's three video
+	 * pages (dword offsets 0 / 16640 / 33280, up to byte 133120) are never
+	 * dropped.  Old SD-card configs with vga_mem=128K would otherwise leave
+	 * the third page zeroed (black) due to the size check in vga_mem_write. */
+	pc->vga_mem_size = 256u << 10;   /* fixed: gfx_buffer is always 256 KB */
+	pc->vga_mem = gfx_buffer;
 	memset(pc->vga_mem, 0, pc->vga_mem_size);
 	pc->vga = vga_init(pc->vga_mem, pc->vga_mem_size,
 			   fb, conf->width, conf->height);
