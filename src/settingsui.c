@@ -121,7 +121,7 @@ void settingsui_close(void) {
         config_set_soundblaster(orig_soundblaster);
         config_set_tandy(orig_tandy);
         config_set_covox(orig_covox);
-        config_set_covox(orig_dss);
+        config_set_dss(orig_dss);
         config_set_mouse(orig_mouse);
         config_set_cpu_freq(orig_cpu_freq);
         config_set_psram_freq(orig_psram_freq);
