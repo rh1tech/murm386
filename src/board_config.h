@@ -43,7 +43,7 @@
  */
 
 // Default to M1 if no config specified
-#if !defined(BOARD_M1) && !defined(BOARD_M2)
+#if !defined(BOARD_M1) && !defined(BOARD_M2) && !defined(BOARD_PC)
 #define BOARD_M1
 #endif
 
@@ -200,6 +200,54 @@ static inline uint get_psram_pin(void) {
 #define VGA_BASE_PIN HDMI_BASE_PIN
 
 #endif // BOARD_M2
+
+//=============================================================================
+// Olimex PICO-PC Layout Configuration
+//=============================================================================
+#ifdef BOARD_PC
+
+// HDMI Pins
+#define HDMI_PIN_CLKN 12
+
+#define HDMI_BASE_PIN HDMI_PIN_CLKN
+
+// SD Card Pins
+#define SDCARD_PIN_CLK    6
+#define SDCARD_PIN_CMD    7
+#define SDCARD_PIN_D0     4
+#define SDCARD_PIN_D3     22
+
+/*
+        # GP-0  DBG1-1
+        # GP-1  DBG1-2
+
+        # GP-5  UXT1-10
+        # GP-8  UXT1-6
+        # GP-9  UXT1-5
+        # GP-21 UXT1-4
+        # GP-20 UXT1-3
+
+        # GP-2 QWST1-3
+        # GP-3 QWST1-4
+*/
+// PS/2 Keyboard Pins
+#define PS2_PIN_CLK  0
+#define PS2_PIN_DATA 1
+
+// NES/SNES Gamepad Pins
+#define NESPAD_GPIO_CLK   5  // UXT1-10
+#define NESPAD_GPIO_DATA  20 // UXT1-3
+#define NESPAD_GPIO_LATCH 9  // UXT1-5
+
+// PS/2 Mouse Pins (if available)
+#define PS2_MOUSE_CLK  2
+#define PS2_MOUSE_DATA 3
+
+#define PWM_RIGHT_PIN 27
+#define PWM_LEFT_PIN 28
+
+#endif // BOARD_PC
+
 
 //=============================================================================
 // Common PIO Assignments
