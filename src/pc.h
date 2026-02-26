@@ -61,7 +61,7 @@ typedef struct {
 	SN76489State *sn76489;
 
 	// Covox Speech Thing - no state object needed, just last sample + enable
-	int16_t covox_sample;      /* last written DAC value, centered at 0      */
+	uint8_t covox_sample;      /* last written DAC value */
 
 	// Runtime enable flags for audio devices (checked in mixer_callback)
 	int adlib_enabled;

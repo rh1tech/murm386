@@ -384,7 +384,7 @@ static void pc_io_write(void *o, int addr, u8 val)
 	 * 0x278 = LPT2 data. */
 	case 0x278:
 		if (pc->covox_enabled)
-			pc->covox_sample = (int16_t)((val - 128) << 6);
+			pc->covox_sample = val;
 		return;
 	// Disney Sound Source
     case 0x378:
@@ -920,20 +920,12 @@ void mixer_callback (void *opaque, uint8_t *stream, int free)
 	}
 
 	// Covox Speech Thing - sample-and-hold DAC on LPT2 port (only if enabled)
-	// covox_sample decays toward silence between writes to avoid DC offset buzz
-	if (pc->covox_enabled) {
-		int16_t cv = pc->covox_sample;
-		if (cv != 0) {
-			for (int i = 0; i < free / 2; i++) {
-				int res = (int)d2[i] + (int)cv;
-				if (res > 32767)  res = 32767;
-				if (res < -32768) res = -32768;
-				d2[i] = (int16_t)res;
-			}
-			// Decay toward silence: shift right each frame (~60ms to silence)
-			pc->covox_sample = (int16_t)(cv - (cv >> 4));
-			if (pc->covox_sample > -2 && pc->covox_sample < 2)
-				pc->covox_sample = 0;
+	if (pc->covox_enabled && pc->covox_sample) {
+		int cv = (int)pc->covox_sample << 4;
+		for (int i = 0; i < free / 2; i++) {
+			int res = (int)d2[i] + cv;
+			if (res > 32767)  res = 32767;
+			d2[i] = (int16_t)res;
 		}
 	}
 
