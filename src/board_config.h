@@ -138,6 +138,11 @@ static inline uint get_psram_pin(void) {
 #define I2S_DATA_PIN       26
 #define I2S_CLOCK_PIN_BASE 27
 
+// PWM Audio
+#define PWM_RIGHT_PIN 26
+#define PWM_LEFT_PIN 27
+#define BEEPER_PIN 28
+
 // VGA Pins (directly map to HDMI data pins for VGA resistor DAC mode)
 // VGA uses 8 consecutive GPIOs: BBGGRRHS (B=blue, G=green, R=red, H=hsync, S=vsync)
 // For VGA mode on M1, we use GPIO 6-13 with different encoding
@@ -185,6 +190,11 @@ static inline uint get_psram_pin(void) {
 // I2S Audio Pins
 #define I2S_DATA_PIN       9
 #define I2S_CLOCK_PIN_BASE 10
+
+// PWM Audio
+#define BEEPER_PIN 9
+#define PWM_RIGHT_PIN 10
+#define PWM_LEFT_PIN 11
 
 // VGA Base Pin
 #define VGA_BASE_PIN HDMI_BASE_PIN

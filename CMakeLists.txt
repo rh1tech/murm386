@@ -17,6 +17,11 @@ cmake_minimum_required(VERSION 3.13)
 # Set board to Pico 2 (RP2350)
 set(PICO_BOARD pico2 CACHE STRING "Pico board type")
 
+set(BUILD_NAME "386")
+
+# Firmware version string (set by release.sh or manually)
+set(FIRMWARE_VERSION "v1.01" CACHE STRING "Firmware version string")
+
 # Board configuration variant (M1, M2)
 set(BOARD "M2" CACHE STRING "Board variant: M1 or M2")
 # Alias for backwards compatibility
@@ -31,8 +36,8 @@ set(CPU_SPEED "504" CACHE STRING "CPU clock in MHz: 378, 504")
 # PSRAM speed configuration (133, 166 MHz target)
 set(PSRAM_SPEED "166" CACHE STRING "PSRAM max frequency in MHz: 133, 166")
 
-# MOS2 (Murmulator OS 2) build - generates .m1p2/.m2p2 instead of .uf2
-option(MOS2 "Build for Murmulator OS 2 (m1p2/m2p2 format)" OFF)
+# Audio output configuration (I2S or PWM)
+set(AUDIO_TYPE "I2S" CACHE STRING "Audio output: I2S or PWM")
 
 # USB HID keyboard support (disabled by default to keep USB CDC for debug)
 option(USB_HID_ENABLED "Enable USB HID keyboard (disables USB CDC stdio)" ON)
@@ -43,6 +48,16 @@ option(DEBUG_ENABLED "Enable verbose debug output" OFF)
 # Profiling (for performance analysis)
 option(PROFILE_ENABLED "Enable i386 instruction profiling" OFF)
 
+if(BOARD_VARIANT STREQUAL "M1")
+    SET(BUILD_NAME "m1p2-${BUILD_NAME}")
+elseif(BOARD_VARIANT STREQUAL "PC")
+    SET(BUILD_NAME "PCp2-${BUILD_NAME}")
+elseif(BOARD_VARIANT STREQUAL "Z0")
+    SET(BUILD_NAME "z0p2-${BUILD_NAME}")
+else()  # M2
+    SET(BUILD_NAME "m2p2-${BUILD_NAME}")
+endif()
+
 # CPU voltage selection based on speed
 if(CPU_SPEED GREATER_EQUAL 504)
     set(CPU_VOLTAGE "VREG_VOLTAGE_1_65")
@@ -52,11 +67,14 @@ else()
     set(CPU_VOLTAGE "VREG_VOLTAGE_1_50")
 endif()
 
-message(STATUS "murm386: Board=${BOARD}, CPU=${CPU_SPEED}MHz, PSRAM=${PSRAM_SPEED}MHz, Voltage=${CPU_VOLTAGE}, MOS2=${MOS2}")
+message(STATUS "murm386: Board=${BOARD}, CPU=${CPU_SPEED}MHz, PSRAM=${PSRAM_SPEED}MHz, Voltage=${CPU_VOLTAGE} ${AUDIO_TYPE}")
 
 include(pico_sdk_import.cmake)
 
-project(murm386 C CXX ASM)
+set(OUTPUT_DIR "${CMAKE_SOURCE_DIR}/bin/${CMAKE_BUILD_TYPE}")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${OUTPUT_DIR}")
+
+project(${BUILD_NAME} C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
@@ -163,13 +181,21 @@ target_include_directories(audio_driver PUBLIC drivers/audio src)
 target_compile_definitions(audio_driver PRIVATE
     BOARD_${BOARD}
 )
-target_link_libraries(audio_driver pico_stdlib hardware_dma hardware_pio hardware_clocks hardware_sync hardware_irq)
 pico_generate_pio_header(audio_driver ${CMAKE_CURRENT_LIST_DIR}/drivers/audio/audio_i2s.pio)
+if(AUDIO_TYPE STREQUAL "I2S")
+    target_link_libraries(audio_driver pico_stdlib hardware_dma hardware_pio hardware_clocks hardware_sync hardware_irq)
+    target_compile_definitions(audio_driver PRIVATE FEATURE_AUDIO_I2S=1)
+elseif(AUDIO_TYPE STREQUAL "PWM")
+    target_link_libraries(audio_driver pico_stdlib hardware_dma hardware_pio hardware_clocks hardware_sync hardware_irq hardware_pwm)
+    target_compile_definitions(audio_driver PRIVATE FEATURE_AUDIO_PWM=1)
+endif()
 
 #=============================================================================
 # USB HID Keyboard Driver (optional)
 #=============================================================================
 add_subdirectory(drivers/usbhid)
+
+SET(BUILD_NAME "${BUILD_NAME}-VGA-${CPU_SPEED}MHz-P${PSRAM_SPEED}-${AUDIO_TYPE}-${FIRMWARE_VERSION}")
 
 #=============================================================================
 # Core 386 Emulator Sources
@@ -211,7 +237,7 @@ set(EMU_CORE_SOURCES
 #=============================================================================
 # Main Executable
 #=============================================================================
-add_executable(murm386
+add_executable(${BUILD_NAME}
     src/main.c
     src/platform_rp2350.c
     src/stubs_rp2350.c
@@ -221,7 +247,7 @@ add_executable(murm386
     ${EMU_CORE_SOURCES}
 )
 
-target_include_directories(murm386 PRIVATE
+target_include_directories(${BUILD_NAME} PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}
     ${CMAKE_CURRENT_LIST_DIR}/src
     ${CMAKE_CURRENT_LIST_DIR}/drivers/fatfs
@@ -234,12 +260,12 @@ target_include_directories(murm386 PRIVATE
 )
 # Only include usbhid directory when USB HID is enabled (to avoid tusb_config.h conflicts)
 if(USB_HID_ENABLED)
-    target_include_directories(murm386 PRIVATE
+    target_include_directories(${BUILD_NAME} PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}/drivers/usbhid
     )
 endif()
 
-target_compile_definitions(murm386 PRIVATE
+target_compile_definitions(${BUILD_NAME} PRIVATE
     # Version information
     MURM386_VERSION_MAJOR=${MURM386_VERSION_MAJOR}
     MURM386_VERSION_MINOR=${MURM386_VERSION_MINOR}
@@ -273,16 +299,16 @@ target_compile_definitions(murm386 PRIVATE
 
 # Add DEBUG_ENABLED if enabled
 if(DEBUG_ENABLED)
-    target_compile_definitions(murm386 PRIVATE DEBUG_ENABLED=1)
+    target_compile_definitions(${BUILD_NAME} PRIVATE DEBUG_ENABLED=1)
 endif()
 
 # Add I386_PROFILE if profiling enabled
 if(PROFILE_ENABLED)
-    target_compile_definitions(murm386 PRIVATE I386_PROFILE=1)
+    target_compile_definitions(${BUILD_NAME} PRIVATE I386_PROFILE=1)
 endif()
 
 # Compiler optimizations for performance
-target_compile_options(murm386 PRIVATE
+target_compile_options(${BUILD_NAME} PRIVATE
     -O3
     -ffunction-sections
     -fdata-sections
@@ -293,11 +319,7 @@ set_source_files_properties(src/i386_arm.S PROPERTIES
     COMPILE_FLAGS "-mcpu=cortex-m33 -mthumb"
 )
 
-target_link_options(murm386 PRIVATE
-    -Wl,--gc-sections
-)
-
-target_link_libraries(murm386
+target_link_libraries(${BUILD_NAME}
     pico_stdlib
     pico_multicore
     hardware_spi
@@ -321,40 +343,12 @@ target_link_libraries(murm386
 # USB configuration: USB HID uses Host mode which disables CDC
 if(USB_HID_ENABLED)
     message(STATUS "USB HID enabled: Using UART for stdio (USB is Host mode for keyboard)")
-    pico_enable_stdio_usb(murm386 0)
-    pico_enable_stdio_uart(murm386 0)
+    pico_enable_stdio_usb(${BUILD_NAME} 0)
+    pico_enable_stdio_uart(${BUILD_NAME} 0)
 else()
     # USB Serial console (when USB HID is disabled)
-    pico_enable_stdio_usb(murm386 1)
-    pico_enable_stdio_uart(murm386 0)
-endif()
-
-# Generate UF2 and other output formats
-pico_add_extra_outputs(murm386)
-
-#=============================================================================
-# MOS2 Linker Script and Output Format
-#=============================================================================
-if(MOS2)
-    # Use MOS2 linker script (reserves first 128KB for bootloader)
-    pico_set_linker_script(murm386 "${CMAKE_SOURCE_DIR}/memmap.mos2.ld")
-
-    # Determine output extension based on board
-    if(BOARD STREQUAL "M2")
-        set(MOS2_EXT "m2p2")
-    else()
-        set(MOS2_EXT "m1p2")
-    endif()
-
-    # Rename .uf2 to .m1p2/.m2p2 after build
-    add_custom_command(TARGET murm386 POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E rename
-            "${CMAKE_CURRENT_BINARY_DIR}/murm386.uf2"
-            "${CMAKE_CURRENT_BINARY_DIR}/murm386.${MOS2_EXT}"
-        COMMENT "Renaming to MOS2 format: murm386.${MOS2_EXT}"
-    )
-
-    message(STATUS "MOS2 build: Output will be murm386.${MOS2_EXT}")
+    pico_enable_stdio_usb(${BUILD_NAME} 1)
+    pico_enable_stdio_uart(${BUILD_NAME} 0)
 endif()
 
 #=============================================================================
@@ -366,9 +360,12 @@ message(STATUS "  Board Variant:  ${BOARD}")
 message(STATUS "  CPU Speed:      ${CPU_SPEED} MHz")
 message(STATUS "  CPU Voltage:    ${CPU_VOLTAGE}")
 message(STATUS "  PSRAM Speed:    ${PSRAM_SPEED} MHz")
+message(STATUS "  Audio Type:     ${AUDIO_TYPE}")
 message(STATUS "  USB HID:        ${USB_HID_ENABLED}")
 message(STATUS "  Debug Output:   ${DEBUG_ENABLED}")
-message(STATUS "  MOS2 Build:     ${MOS2}")
 message(STATUS "")
 
-target_link_options(murm386 PRIVATE -Xlinker --print-memory-usage --data-sections)
+# Create UF2 output
+pico_add_extra_outputs(${BUILD_NAME})
+
+target_link_options(${BUILD_NAME} PRIVATE -Xlinker --print-memory-usage --data-sections -Wl,--gc-sections)
