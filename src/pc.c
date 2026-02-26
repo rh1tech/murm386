@@ -939,19 +939,7 @@ void mixer_callback (void *opaque, uint8_t *stream, int free)
 
 	// Disney Sound Source
 	if (pc->dss_enabled) {
-		for (int i = 0; i < free / 2; i += 2) {
-			int16_t cv = dss_sample_step();
-			// Left
-			int res = d2[i] + cv;
-			if (res > 32767) res = 32767;
-			if (res < -32768) res = -32768;
-			d2[i] = res;
-			// Right
-			res = d2[i + 1] + cv;
-			if (res > 32767) res = 32767;
-			if (res < -32768) res = -32768;
-			d2[i + 1] = res;
-		}
+		dss_samples(d2, free);
 	}
 }
 

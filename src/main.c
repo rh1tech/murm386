@@ -844,18 +844,22 @@ static bool init_emulator(void) {
 }
 
 //=============================================================================
-// Core 1 Entry Point (VGA rendering + Audio processing)
+// Core 1 Entry Point (Audio processing)
 //=============================================================================
 
-static void core1_entry(void) {
-    DBG_PRINT("[Core 1] VGA rendering + Audio started\n");
-
+static void __not_in_flash() core1_entry(void) {
+    DBG_PRINT("[Core 1] Audio started\n");
+    uint64_t t_dss = time_us_64();
     while (true) {
-        // VGA driver handles rendering in DMA IRQ
-        // Core 1 can do VGA updates from PSRAM
         if (initialized && pc) {
-            vga_hw_update();
-
+            // Disney Sound Source 7 kHz
+            if (pc->dss_enabled) {
+                uint64_t t = time_us_64();
+                if (t - t_dss >= 1000000 / 7000) { // 142 us for 7 kHz
+                    dss_process_sample();
+                    t_dss = t;
+                }
+            }
             // Process audio whenever the driver needs samples (DMA buffer free)
             // This decouples audio generation from CPU time and locks it to
             // the actual playback rate (preventing underruns/clicks).
@@ -986,7 +990,7 @@ int main(void) {
         }
     }
 
-    // Start Core 1 for VGA rendering
+    // Start Core 1 for audio processing
     multicore_launch_core1(core1_entry);
 
     initialized = true;

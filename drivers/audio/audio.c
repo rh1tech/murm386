@@ -497,7 +497,7 @@ i2s_config_t* audio_get_i2s_config(void) {
     return &i2s_config;
 }
 
-bool audio_needs_samples(void) {
+bool __not_in_flash() audio_needs_samples(void) {
     if (!audio_initialized || !audio_enabled) return false;
     // Check if any buffer is free in the mask
     return (dma_buffers_free_mask != 0);

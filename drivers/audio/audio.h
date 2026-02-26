@@ -89,4 +89,7 @@ i2s_config_t* audio_get_i2s_config(void);
 // Check if audio system needs more samples (buffer free)
 bool audio_needs_samples(void);
 
+/// TODO: 
+void dss_process_sample(void);
+
 #endif // AUDIO_H
