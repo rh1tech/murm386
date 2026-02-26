@@ -856,7 +856,7 @@ void mixer_callback (void *opaque, uint8_t *stream, int free)
 
 	// Early exit if all audio disabled - major performance optimization
 	if (!pc->adlib_enabled && !pc->sb16_enabled && !pc->pcspk_enabled &&
-	    !pc->tandy_enabled && !pc->covox_enabled) {
+	    !pc->tandy_enabled && !pc->covox_enabled && !pc->dss_enabled) {
 		memset(stream, 0, free);
 		return;
 	}
