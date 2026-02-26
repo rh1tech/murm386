@@ -27,6 +27,8 @@
 #include "hardware/pio.h"
 #include "hardware/sync.h"
 
+bool SELECT_VGA = false;
+
 // ============================================================================
 // PIO Program
 // ============================================================================
@@ -119,8 +121,8 @@ static uint16_t txt_palette_fast[256 * 4];
 // Graphics palette (256 entries) - 16-bit dithered format
 // Each entry: low byte = c_hi (conv0), high byte = c_lo (conv1)
 // even - A, odd - B
-static uint16_t palette_a[256];
-static uint16_t palette_b[256];
+uint16_t palette_a[512] __aligned(4);
+static uint16_t* palette_b = &palette_a[256];
 
 // 16-color EGA palette (for 16-color modes) - 8-bit VGA format with sync bits
 static uint8_t ega_palette[16];
@@ -199,10 +201,15 @@ static inline uint8_t vga_color_to_output(uint8_t r6, uint8_t g6, uint8_t b6) {
     return TMPL_LINE | (r2 << 4) | (g2 << 2) | b2;
 }
 
+void graphics_set_palette_hdmi(const uint8_t R, const uint8_t G, const uint8_t B,  uint8_t i);
 // Convert 6-bit VGA DAC values to 16-bit dithered output
 // Returns: low byte = c_hi (conv0), high byte = c_lo (conv1)
 // When output as 16-bit, adjacent pixels get different colors for spatial dithering
 static void vga_color_to_dithered(uint8_t r6, uint8_t g6, uint8_t b6, uint32_t idx) {
+    if (!SELECT_VGA) {
+        graphics_set_palette_hdmi(r6, g6, b6, idx);
+        return;
+    }
     // Convert 6-bit (0-63) to 3-bit (0-7) for dither table lookup
     // 63/7 ≈ 9, so divide by 9
     uint8_t r = r6 / 9;
@@ -1027,8 +1034,19 @@ static void __isr __time_critical_func(dma_handler_vga)(void) {
 // ============================================================================
 // Public API
 // ============================================================================
-
+int testPins(uint32_t pin0, uint32_t pin1);
+void graphics_init_hdmi();
 void vga_hw_init(void) {
+    uint8_t linkVGA01 = testPins(VGA_BASE_PIN, VGA_BASE_PIN + 1);
+    #if defined(BOARD_Z0) || defined(BOARD_Z2) || defined(BOARD_DV)
+        SELECT_VGA = linkVGA01 == 0x1F;
+    #else
+        SELECT_VGA = (linkVGA01 == 0) || (linkVGA01 == 0x1F);
+    #endif
+    if (!SELECT_VGA) {
+        graphics_init_hdmi();
+        return;
+    }
     DBG_PRINT("VGA Init (pico-286 style)...\n");
 
     init_palettes();
