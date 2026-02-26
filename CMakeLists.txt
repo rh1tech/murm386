@@ -23,7 +23,7 @@ set(BUILD_NAME "386")
 set(FIRMWARE_VERSION "v1.01" CACHE STRING "Firmware version string")
 
 # Board configuration variant (M1, M2)
-set(BOARD "M2" CACHE STRING "Board variant: M1 or M2")
+set(BOARD "M1" CACHE STRING "Board variant: M1 or M2")
 # Alias for backwards compatibility
 if(DEFINED BOARD_VARIANT AND NOT DEFINED BOARD)
     set(BOARD ${BOARD_VARIANT})
@@ -37,7 +37,7 @@ set(CPU_SPEED "504" CACHE STRING "CPU clock in MHz: 378, 504")
 set(PSRAM_SPEED "166" CACHE STRING "PSRAM max frequency in MHz: 133, 166")
 
 # Audio output configuration (I2S or PWM)
-set(AUDIO_TYPE "I2S" CACHE STRING "Audio output: I2S or PWM")
+set(AUDIO_TYPE "PWM" CACHE STRING "Audio output: I2S or PWM")
 
 # USB HID keyboard support (disabled by default to keep USB CDC for debug)
 option(USB_HID_ENABLED "Enable USB HID keyboard (disables USB CDC stdio)" ON)
@@ -161,10 +161,12 @@ target_link_libraries(psram pico_stdlib hardware_clocks)
 # VGA Video Driver
 #=============================================================================
 add_library(video_driver
+    drivers/hdmi/hdmi.c
+    drivers/vga/test_pins.c
     drivers/vga/vga_hw.c
     drivers/vga/vga_osd.c
 )
-target_include_directories(video_driver PUBLIC drivers/vga src)
+target_include_directories(video_driver PUBLIC drivers/vga drivers/hdmi src)
 target_compile_definitions(video_driver PRIVATE
     BOARD_${BOARD}
     RP2350_BUILD=1
@@ -195,7 +197,7 @@ endif()
 #=============================================================================
 add_subdirectory(drivers/usbhid)
 
-SET(BUILD_NAME "${BUILD_NAME}-VGA-${CPU_SPEED}MHz-P${PSRAM_SPEED}-${AUDIO_TYPE}-${FIRMWARE_VERSION}")
+SET(BUILD_NAME "${BUILD_NAME}-${CPU_SPEED}MHz-P${PSRAM_SPEED}-${AUDIO_TYPE}-${FIRMWARE_VERSION}")
 
 #=============================================================================
 # Core 386 Emulator Sources
@@ -256,6 +258,7 @@ target_include_directories(${BUILD_NAME} PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/drivers/ps2mouse
     ${CMAKE_CURRENT_LIST_DIR}/drivers/psram
     ${CMAKE_CURRENT_LIST_DIR}/drivers/vga
+    ${CMAKE_CURRENT_LIST_DIR}/drivers/hdmi
     ${CMAKE_CURRENT_LIST_DIR}/drivers/audio
 )
 # Only include usbhid directory when USB HID is enabled (to avoid tusb_config.h conflicts)
