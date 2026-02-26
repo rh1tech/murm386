@@ -74,10 +74,6 @@ void vga_hw_set_palette16(const uint8_t *palette16_data);
 // line_offset is the number of words per scanline (from VGA cr[0x13])
 void vga_hw_set_gfx_mode(int submode, int width, int height, int line_offset);
 
-// Update VGA from PSRAM - call from main loop periodically
-// Copies text buffer from PSRAM to SRAM for IRQ-safe rendering
-void vga_hw_update(void);
-
 // Get current frame count
 uint32_t vga_hw_get_frame_count(void);
 

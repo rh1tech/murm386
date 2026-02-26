@@ -1233,14 +1233,6 @@ void __time_critical_func(vga_hw_set_gfx_mode)(int submode, int width, int heigh
     }
 }
 
-// Call this from main loop to update the SRAM buffers from PSRAM
-// For text mode: copies text buffer during vblank
-// For graphics mode: pre-renders scanlines ahead of the beam
-void vga_hw_update(void) {
-    // Don't update text buffer when OSD is visible (it reuses the same buffer)
-    if (osd_is_visible()) return;
-}
-
 uint32_t vga_hw_get_frame_count(void) {
     return frame_count;
 }
