@@ -48,11 +48,11 @@ option(DEBUG_ENABLED "Enable verbose debug output" OFF)
 # Profiling (for performance analysis)
 option(PROFILE_ENABLED "Enable i386 instruction profiling" OFF)
 
-if(BOARD_VARIANT STREQUAL "M1")
+if(BOARD STREQUAL "M1")
     SET(BUILD_NAME "m1p2-${BUILD_NAME}")
-elseif(BOARD_VARIANT STREQUAL "PC")
+elseif(BOARD STREQUAL "PC")
     SET(BUILD_NAME "PCp2-${BUILD_NAME}")
-elseif(BOARD_VARIANT STREQUAL "Z0")
+elseif(BOARD STREQUAL "Z0")
     SET(BUILD_NAME "z0p2-${BUILD_NAME}")
 else()  # M2
     SET(BUILD_NAME "m2p2-${BUILD_NAME}")
@@ -363,6 +363,7 @@ message(STATUS "  PSRAM Speed:    ${PSRAM_SPEED} MHz")
 message(STATUS "  Audio Type:     ${AUDIO_TYPE}")
 message(STATUS "  USB HID:        ${USB_HID_ENABLED}")
 message(STATUS "  Debug Output:   ${DEBUG_ENABLED}")
+message(STATUS "  Build Name:     ${BUILD_NAME}")
 message(STATUS "")
 
 # Create UF2 output
