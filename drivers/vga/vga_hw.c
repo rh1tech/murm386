@@ -63,8 +63,8 @@ static const struct pio_program pio_vga_program = {
 #define DEFAULT_ACTIVE_END    (DEFAULT_ACTIVE_START + 400)  // 440
 
 // Dynamic active area — adjusted by vga_hw_set_gfx_mode() for 480-line modes
-static int active_start = DEFAULT_ACTIVE_START;
-static int active_end   = DEFAULT_ACTIVE_END;
+int active_start = DEFAULT_ACTIVE_START;
+int active_end   = DEFAULT_ACTIVE_END;
 
 #define HS_SIZE             96
 #define SHIFT_PICTURE       VGA_SHIFT_PICTURE  // Where active video starts (from board_config.h)
@@ -892,7 +892,7 @@ static void __time_critical_func(render_line)(uint32_t line, uint32_t *output_bu
 
 static inline void vga_hw_set_mode(int mode);
 
-static void __time_critical_func(vga_hw_new_frame)(void) {
+void __time_critical_func(vga_hw_new_frame)(void) {
     static int last_vga_mode = -1;
     // Update cursor
     int cx, cy, cs, ce, cv;
