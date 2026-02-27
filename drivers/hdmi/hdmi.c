@@ -42,6 +42,11 @@ extern uint16_t frame_vram_offset;
 extern uint8_t  frame_pixel_panning;
 extern int      frame_line_compare;
 
+extern int active_start;
+extern int active_end;
+
+void vga_hw_new_frame(void); // vsync
+
 // #define HDMI_WIDTH 480 //480 Default
 // #define HDMI_HEIGHT 644 //524 Default
 // #define HDMI_HZ 52 //60 Default
@@ -68,7 +73,7 @@ static uint32_t irq_inx = 0;
 
 //функции и константы HDMI
 
-#define BASE_HDMI_CTRL_INX (240)
+#define BASE_HDMI_CTRL_INX (251)
 //программа конвертации адреса
 
 uint16_t pio_program_instructions_conv_HDMI[] = {
@@ -267,17 +272,31 @@ static void __scratch_y("hdmi_driver") dma_handler_HDMI() {
 
     pre_render_line();
 
-    if (line++ > 524) line = 0;
+    if (line++ > 524) {
+        line = 0;
+        vga_hw_new_frame();
+    }
 
     if ((line & 1) == 1) return; // повторяем чётные строки на нечётных
     inx_buf_dma++;
 
     uint8_t* activ_buf = (uint8_t *)dma_lines[inx_buf_dma & 1];
 
-    if (line < 480) {
+    if (line < 480) { //область изображения
         uint8_t* output_buffer = activ_buf + 72; //для выравнивания синхры;
-        int y = line >> 1;
-        //область изображения
+
+        // --- Верхнее поле ---
+        if (line < (uint32_t)active_start) {
+            nf_memset(output_buffer, 255, SCREEN_WIDTH);
+            goto f;
+        }
+        // --- Нижнее поле ---
+        if (line >= (uint32_t)active_end) {
+            nf_memset(output_buffer, 255, SCREEN_WIDTH);
+            goto f;
+        }
+
+        int y = (line - active_start) >> 1;
         //заполняем пространство снизу графического буфера
         if (y >= SCREEN_HEIGHT) {
             nf_memset(output_buffer, 255, SCREEN_WIDTH);
@@ -350,6 +369,11 @@ static inline void irq_set_exclusive_handler_DMA_core1() {
 }
 
 void graphics_set_palette_hdmi(const uint8_t R, const uint8_t G, const uint8_t B,  uint8_t i);
+void graphics_set_palette_hdmi2(
+    const uint8_t R1, const uint8_t G1, const uint8_t B1,
+    const uint8_t R2, const uint8_t G2, const uint8_t B2,
+    uint8_t i
+);
 
 //деинициализация - инициализация ресурсов
 static inline bool hdmi_init() {
@@ -392,14 +416,47 @@ static inline bool hdmi_init() {
     offs_prg0 = pio_add_program(PIO_VIDEO, &program_PIO_HDMI);
     pio_set_x(PIO_VIDEO_ADDR, SM_conv, ((uint32_t)conv_color >> 12));
 
-    //заполнение палитры
-    for (int ci = 0; ci < 240; ci++) graphics_set_palette_hdmi(66, 66, 66, ci); //
+    // Заполнение палитры — CGA 16 цветов (индексы 0-15)
+    // Формат cga_colors: 6-бит RRGGBB (как в VGA DAC)
+    static const uint8_t cga_colors[16][3] = {
+        { 0,  0,  0},  //  0: Black
+        { 0,  0, 42},  //  1: Blue        (0x02 -> b=2/3*63)
+        { 0, 42,  0},  //  2: Green
+        { 0, 42, 42},  //  3: Cyan
+        {42,  0,  0},  //  4: Red
+        {42,  0, 42},  //  5: Magenta
+        {42, 21,  0},  //  6: Brown
+        {42, 42, 42},  //  7: Light Gray
+        {21, 21, 21},  //  8: Dark Gray
+        {21, 21, 63},  //  9: Light Blue
+        {21, 63, 21},  // 10: Light Green
+        {21, 63, 63},  // 11: Light Cyan
+        {63, 21, 21},  // 12: Light Red
+        {63, 21, 63},  // 13: Light Magenta
+        {63, 63, 21},  // 14: Yellow
+        {63, 63, 63},  // 15: White
+    };
+    
+    // заполнение палитры (text) 4 старших bit первый пиксел, 4 младших - второй
+    for (int c1 = 0; c1 < 16; ++c1) {
+        const uint8_t* c13 = cga_colors[c1];
+        for (int c2 = 0; c2 < 16; ++c2) {
+            const uint8_t* c23 = cga_colors[c2];
+            int ci = c1 << 4 | c2; // compund index
+            // 6-бит (0-63) → 8-бит (0-255)
+            graphics_set_palette_hdmi2(
+                c13[0] << 2, c13[1] << 2, c13[2] << 2,
+                c23[0] << 2, c23[1] << 2, c23[2] << 2,
+                ci
+            );
+        }
+    }
 
     //255 - цвет фона
     graphics_set_palette_hdmi(0, 0, 0, 255);
 
 
-    //240-243 служебные данные(синхра) напрямую вносим в массив -конвертер
+    //BASE_HDMI_CTRL_INX +3 служебные данные(синхра) напрямую вносим в массив -конвертер
     uint64_t* conv_color64 = (uint64_t *)conv_color;
     const uint16_t b0 = 0b1101010100;
     const uint16_t b1 = 0b0010101011;
@@ -590,6 +647,19 @@ void graphics_set_palette_hdmi(const uint8_t R, const uint8_t G, const uint8_t B
     conv_color64[i * 2] = get_ser_diff_data(tmds_encoder(R), tmds_encoder(G), tmds_encoder(B));
     conv_color64[i * 2 + 1] = conv_color64[i * 2] ^ 0x0003ffffffffffffl;
 };
+
+void graphics_set_palette_hdmi2(
+    const uint8_t R1, const uint8_t G1, const uint8_t B1,
+    const uint8_t R2, const uint8_t G2, const uint8_t B2,
+    uint8_t i
+) {
+    if ((i >= BASE_HDMI_CTRL_INX) && (i != 255)) return;
+    uint64_t* conv_color64 = (uint64_t*)conv_color;
+    uint64_t c1 = get_ser_diff_data(tmds_encoder(R1), tmds_encoder(G1), tmds_encoder(B1));
+    uint64_t c2 = get_ser_diff_data(tmds_encoder(R2), tmds_encoder(G2), tmds_encoder(B2));
+    conv_color64[i * 2]     = c1;
+    conv_color64[i * 2 + 1] = (c1 == c2) ? (c2 ^ 0x0003ffffffffffffl) : c2;
+}
 
 #define RGB888(r, g, b) ((r<<16) | (g << 8 ) | b )
 
