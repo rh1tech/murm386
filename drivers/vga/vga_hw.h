@@ -74,9 +74,6 @@ void vga_hw_set_palette16(const uint8_t *palette16_data);
 // line_offset is the number of words per scanline (from VGA cr[0x13])
 void vga_hw_set_gfx_mode(int submode, int width, int height, int line_offset);
 
-// Get current frame count
-uint32_t vga_hw_get_frame_count(void);
-
 // Legacy API (compatibility stubs)
 uint8_t *vga_hw_get_framebuffer(void);
 void vga_hw_clear(uint8_t color);

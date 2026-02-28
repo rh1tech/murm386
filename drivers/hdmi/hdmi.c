@@ -30,10 +30,10 @@ extern uint32_t palette_a[256];
 
 #define GFX_BUFFER_SIZE (256 * 1024)
 extern uint8_t gfx_buffer[GFX_BUFFER_SIZE];
-extern volatile int text_cols;
+extern int text_cols;
 // Stride in *character cells* (uint32_t per cell in gfx_buffer text layout).
 // For VGA CRTC Offset (0x13): cells_per_row = cr13 * 2 (80-col -> 40*2, 40-col -> 20*2).
-extern volatile int text_stride_cells;
+extern int text_stride_cells;
 // Direct pointer to VGA register state (set once by core0 after vga_init).
 // ISR reads cr[], ar[] directly at the right moment — no volatile intermediates.
 extern VGAState *vga_state;
