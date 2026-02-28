@@ -281,7 +281,7 @@ static void __time_critical_func(render_line)(uint32_t line, uint8_t *output_buf
         render_text_line(line, output_buffer);
         return;
     }
-    if (!(line & 1)) return; // повторяем чётные строки на нечётных
+    if (line & 1) return; // повторяем чётные строки на нечётных
     int y = line >> 1;
     uint8_t* input_buffer = gfx_buffer + y * SCREEN_WIDTH;
     uint8_t* activ_buf_end = output_buffer + SCREEN_WIDTH;

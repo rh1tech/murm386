@@ -6,17 +6,21 @@ extern "C" {
 
 #include "inttypes.h"
 #include "stdbool.h"
+#include "board_config.h"
 
 #include "hardware/pio.h"
 
+#ifndef PIO_VIDEO
 #define PIO_VIDEO pio0
 #define PIO_VIDEO_ADDR pio0
 #define VIDEO_DMA_IRQ (DMA_IRQ_0)
+#endif
 
 #ifndef HDMI_BASE_PIN
 #define HDMI_BASE_PIN (6)
 #endif
 
+#ifndef HDMI_PIN_RGB_notBGR
 #if defined(BOARD_Z0) || defined(BOARD_Z2)
 	#define HDMI_PIN_RGB_notBGR (0)
 	#define HDMI_PIN_invert_diffpairs (0)
@@ -27,6 +31,7 @@ extern "C" {
 	#define HDMI_PIN_invert_diffpairs (1)
 	#define beginHDMI_PIN_clk (HDMI_BASE_PIN)
 	#define beginHDMI_PIN_data (HDMI_BASE_PIN+2)
+#endif
 #endif
 
 #define TEXTMODE_COLS 53

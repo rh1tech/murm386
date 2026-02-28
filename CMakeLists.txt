@@ -23,7 +23,7 @@ set(BUILD_NAME "386")
 set(FIRMWARE_VERSION "v1.01" CACHE STRING "Firmware version string")
 
 # Board configuration variant (M1, M2)
-set(BOARD "M1" CACHE STRING "Board variant: M1 or M2")
+set(BOARD "M2" CACHE STRING "Board variant: M1 or M2")
 # Alias for backwards compatibility
 if(DEFINED BOARD_VARIANT AND NOT DEFINED BOARD)
     set(BOARD ${BOARD_VARIANT})
