@@ -847,6 +847,60 @@ static bool init_emulator(void) {
 //=============================================================================
 // Core 1 Entry Point (Audio processing)
 //=============================================================================
+static bool __not_in_flash_func(timer_callback)(repeating_timer_t *rt) {
+    static uint64_t t_dss = 0;
+    static int dss_v = 0;
+    // Disney Sound Source 7 kHz
+    if (pc->dss_enabled) {
+        uint64_t t = time_us_64();
+        if (t - t_dss >= 1000000 / 7000) { // 142 us for 7 kHz
+            t_dss = t;
+            dss_v = dss_sample();
+        }
+    }
+    // output:
+    int b_v = 0;
+    int r_v = 0;
+    int l_v = 0;
+    if (pc->pcspk_enabled) {
+        b_v = pcspk_sample(pc->pcspk);
+    }
+    if (pc->covox_enabled && pc->covox_sample) {
+        int16_t sample = ((int16_t)pc->covox_sample - 127) << 8;
+        r_v += sample;
+        l_v += sample;
+    }
+    if (pc->tandy_enabled) {
+        int16_t sample = sn76489_sample(); // 16-bit
+        r_v += sample;
+        l_v += sample;
+    }
+    r_v += dss_v;
+    l_v += dss_v;
+    #if FEATURE_AUDIO_PWM
+        uint16_t ub_v = (b_v + 32768) >> 4; // 16 signed bit to 12 unsigned
+        uint16_t ur_v = (r_v + 32768) >> 4;
+        uint16_t ul_v = (l_v + 32768) >> 4;
+        if (ub_v > 4095) ub_v = 4095;
+        if (ur_v > 4095) ur_v = 4095;
+        if (ul_v > 4095) ul_v = 4095;
+        pwm_set_gpio_level(PWM_RIGHT_PIN, ur_v);
+        pwm_set_gpio_level(PWM_LEFT_PIN, ul_v);
+        pwm_set_gpio_level(BEEPER_PIN, ub_v);
+    #elif FEATURE_AUDIO_I2S
+    // TODO:
+    #endif
+    /*
+    // Process audio whenever the driver needs samples (DMA buffer free)
+    // This decouples audio generation from CPU time and locks it to
+    // the actual playback rate (preventing underruns/clicks).
+    if (audio_needs_samples()) {
+        // Mix SB16, Adlib, PC Speaker and output to I2S
+        audio_process_frame(pc);
+    }
+    */
+    return true;
+}
 
 static void __not_in_flash_func(core1_entry)(void) {
 
@@ -859,66 +913,9 @@ static void __not_in_flash_func(core1_entry)(void) {
         sleep_ms(1);
         __dmb;
     }
-    uint64_t t_44100 = time_us_64();
-    uint32_t t_dss = time_us_32();
-    int dss_v = 0;
-    while (1) {
-        // Disney Sound Source 7 kHz
-        if (pc->dss_enabled) {
-            uint32_t t = time_us_32();
-            if (t - t_dss >= 1000000 / 7000) { // 142 us for 7 kHz
-                t_dss = t;
-                dss_v = dss_sample();
-            }
-        }
-        uint64_t t = time_us_64();
-        if (t - t_44100 < (1000000 / 44100)) // ~22 us for 44.1 kHz
-            continue;
-        t_44100 = t;
-        // output:
-        int b_v = 0;
-        int r_v = 0;
-        int l_v = 0;
-        if (pc->pcspk_enabled) {
-            b_v = pcspk_sample(pc->pcspk);
-        }
-        if (pc->covox_enabled && pc->covox_sample) {
-            int16_t sample = ((int16_t)pc->covox_sample - 127) << 8;
-            r_v += sample;
-            l_v += sample;
-        }
-        if (pc->tandy_enabled) {
-            int16_t sample = sn76489_sample(); // 16-bit
-            r_v += sample;
-            l_v += sample;
-        }
-        r_v += dss_v;
-        l_v += dss_v;
-        #if FEATURE_AUDIO_PWM
-            uint16_t ub_v = (b_v + 32768) >> 4; // 16 signed bit to 12 unsigned
-            uint16_t ur_v = (r_v + 32768) >> 4;
-            uint16_t ul_v = (l_v + 32768) >> 4;
-            if (ub_v > 4095) ub_v = 4095;
-            if (ur_v > 4095) ur_v = 4095;
-            if (ul_v > 4095) ul_v = 4095;
-            pwm_set_gpio_level(PWM_RIGHT_PIN, ur_v);
-            pwm_set_gpio_level(PWM_LEFT_PIN, ul_v);
-            pwm_set_gpio_level(BEEPER_PIN, ub_v);
-        #elif FEATURE_AUDIO_I2S
-        // TODO:
-        #endif
-    }
-    __unreachable();
-            /*
-            // Process audio whenever the driver needs samples (DMA buffer free)
-            // This decouples audio generation from CPU time and locks it to
-            // the actual playback rate (preventing underruns/clicks).
-            if (audio_needs_samples()) {
-                // Mix SB16, Adlib, PC Speaker and output to I2S
-                audio_process_frame(pc);
-            }
-            */
-
+    static repeating_timer_t m_timer = { 0 };
+    int hz = 44100;
+	add_repeating_timer_us(-1000000 / hz, timer_callback, NULL, &m_timer);
 }
 
 //=============================================================================
