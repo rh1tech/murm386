@@ -22,13 +22,12 @@
  * THE SOFTWARE.
  */
 
+#include <pico.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
 #include "adlib.h"
-
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 //#define DEBUG
 
@@ -163,4 +162,18 @@ AdlibState *adlib_new()
         s->enabled = 1;
     }
     return s;
+}
+
+// call it 44100 times per sec
+int16_t __not_in_flash_func(adlib_getsample)(AdlibState *s) {
+    if (!s->opl || !(s->active && s->enabled)) {
+        return 0;
+    }
+    static int16_t samples[64] = { 0 };
+    static uint8_t cnt = 64;
+    if (cnt == 64) {
+        cnt = 0;
+        YM3812UpdateOne(s->opl, (void*)samples, 64);
+    }
+    return samples[cnt++] * 2; // TODO: may be 1.5?
 }

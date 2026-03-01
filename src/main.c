@@ -38,6 +38,7 @@
 
 #include "pc.h"
 #include "dss.h"
+#include "adlib.h"
 #include "ini.h"
 #include "debug.h"
 #include "diskui.h"
@@ -878,6 +879,11 @@ static bool __not_in_flash_func(timer_callback)(repeating_timer_t *rt) {
     }
     if (pc->mpu401_enabled) {
         int16_t sample = midi_sample();
+        r_v += sample;
+        l_v += sample;
+    }
+    if (pc->adlib_enabled) {
+        int16_t sample = adlib_getsample(pc->adlib);
         r_v += sample;
         l_v += sample;
     }
