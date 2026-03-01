@@ -82,7 +82,9 @@ static u8 pc_io_read(void *o, int addr)
 	case 0x220: case 0x221: case 0x222: case 0x223:
 	case 0x228: case 0x229:
 	case 0x388: case 0x389: case 0x38a: case 0x38b:
-		return adlib_read(pc->adlib, addr);
+		if (pc->adlib_enabled)
+			return adlib_read(pc->adlib, addr);
+		return 0xFF;
 	case 0xcfc: case 0xcfd: case 0xcfe: case 0xcff:
 		val = i440fx_read_data(pc->i440fx, addr - 0xcfc, 0);
 		return val;
@@ -131,11 +133,15 @@ static u8 pc_io_read(void *o, int addr)
 		val = i8257_read_pageh(pc->isa_hdma, addr - 0x488);
 		return val;
 	case 0x225:
-		val = sb16_mixer_read(pc->sb16, addr);
-		return val;
+		if (pc->sb16_enabled) {
+			return sb16_mixer_read(pc->sb16, addr);
+		}
+		return 0xFF;
 	case 0x226: case 0x22a: case 0x22c: case 0x22d: case 0x22e: case 0x22f:
-		val = sb16_dsp_read(pc->sb16, addr);
-		return val;
+		if (pc->sb16_enabled) {
+			return sb16_dsp_read(pc->sb16, addr);
+		}
+		return 0xFF;
 	case 0x201:
 		/* Gameport / Joystick - return "no joystick" state
 		 * Bits 7-4: buttons (1 = not pressed)
@@ -193,7 +199,9 @@ static u16 pc_io_read16(void *o, int addr)
 	case 0x310:
 		return 0xffff;
 	case 0x220:
-		return adlib_read(pc->adlib, addr);
+		if (pc->adlib_enabled)
+			return adlib_read(pc->adlib, addr);
+		return 0xFFFF;
 	default:
 		fprintf(stderr, "inw 0x%x <= 0x%x\n", addr, 0xffff);
 		return 0xffff;
@@ -312,7 +320,8 @@ static void pc_io_write(void *o, int addr, u8 val)
 	case 0x220: case 0x221: case 0x222: case 0x223:
 	case 0x228: case 0x229:
 	case 0x388: case 0x389: case 0x38a: case 0x38b:
-		adlib_write(pc->adlib, addr, val);
+		if (pc->adlib_enabled)
+			adlib_write(pc->adlib, addr, val);
 		return;
 	case 0x8900:
 		switch (val) {
@@ -374,13 +383,19 @@ static void pc_io_write(void *o, int addr, u8 val)
 		i8257_write_pageh(pc->isa_hdma, addr - 0x488, val);
 		return;
 	case 0x224:
-		sb16_mixer_write_indexb(pc->sb16, addr, val);
+		if (pc->sb16_enabled) {
+			sb16_mixer_write_indexb(pc->sb16, addr, val);
+		}
 		return;
 	case 0x225:
-		sb16_mixer_write_datab(pc->sb16, addr, val);
+		if (pc->sb16_enabled) {
+			sb16_mixer_write_datab(pc->sb16, addr, val);
+		}
 		return;
 	case 0x226: case 0x22c:
-		sb16_dsp_write(pc->sb16, addr, val);
+		if (pc->sb16_enabled) {
+			sb16_dsp_write(pc->sb16, addr, val);
+		}
 		return;
 	/* Tandy 3-Voice Sound (SN76489) - additional alias ports.
 	 * Primary port 0xC0 is handled above.
