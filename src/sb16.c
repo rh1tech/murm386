@@ -23,6 +23,7 @@
  */
 
 #include "sb16.h"
+#include <pico.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -1612,4 +1613,61 @@ SB16State *sb16_new(
     s->can_write = 1;
 
     return s;
+}
+
+// call sb16_getsample 44100 times per second
+void __not_in_flash_func(sb16_getsample)(SB16State *s, int* r_v, int* l_v) {
+    if (!s->active_out && s->audio_q == s->audio_p)
+        return;
+
+    unsigned int len = s->audio_q - s->audio_p;
+    if (len > AUDIO_BUF_LEN) {
+        s->audio_p = s->audio_q;
+        return;
+    }
+
+    static uint32_t phase = 0;
+    uint32_t step = ((uint32_t)s->freq << 16) / 44100;
+
+    int frame_size = s->fmt_stereo ?
+        (s->fmt == AUDIO_FORMAT_U8 || s->fmt == AUDIO_FORMAT_S8 ? 2 : 4) :
+        (s->fmt == AUDIO_FORMAT_U8 || s->fmt == AUDIO_FORMAT_S8 ? 1 : 2);
+
+    phase += step;
+    int advance = (phase >> 16) * frame_size;
+    phase &= 0xffff;
+
+    if (advance > (int)len) advance = len;
+    s->audio_p += advance;
+
+    unsigned int p = s->audio_p % AUDIO_BUF_LEN;
+    int16_t l = 0, r = 0;
+
+    switch (s->fmt) {
+    case AUDIO_FORMAT_S16:
+        l = *(int16_t *)(s->audio_buf + p);
+        r = s->fmt_stereo ? *(int16_t *)(s->audio_buf + (p + 2) % AUDIO_BUF_LEN) : l;
+        break;
+    case AUDIO_FORMAT_U16:
+        l = *(int16_t *)(s->audio_buf + p) - 32768;
+        r = s->fmt_stereo ? *(int16_t *)(s->audio_buf + (p + 2) % AUDIO_BUF_LEN) - 32768 : l;
+        break;
+    case AUDIO_FORMAT_U8:
+        l = (int16_t)(s->audio_buf[p] - 128) << 8;
+        r = s->fmt_stereo ? (int16_t)(s->audio_buf[(p + 1) % AUDIO_BUF_LEN] - 128) << 8 : l;
+        break;
+    case AUDIO_FORMAT_S8:
+        l = (int16_t)(int8_t)s->audio_buf[p] << 8;
+        r = s->fmt_stereo ? (int16_t)(int8_t)s->audio_buf[(p + 1) % AUDIO_BUF_LEN] << 8 : l;
+        break;
+    }
+
+    if (s->dma_running) {
+        int dma = s->use_hdma ? s->hdma : s->dma;
+        IsaDma *isa_dma = s->use_hdma ? s->isa_hdma : s->isa_dma;
+        i8257_dma_hold_DREQ(isa_dma, dma);
+    }
+
+    *l_v += l;
+    *r_v += r;
 }

@@ -887,6 +887,9 @@ static bool __not_in_flash_func(timer_callback)(repeating_timer_t *rt) {
         r_v += sample;
         l_v += sample;
     }
+    if (pc->sb16_enabled) {
+        sb16_getsample(pc->sb16, &r_v, &l_v);
+    }
     r_v += dss_v;
     l_v += dss_v;
     #if FEATURE_AUDIO_PWM

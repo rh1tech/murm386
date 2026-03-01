@@ -305,7 +305,7 @@ static bool i8257_dma_has_autoinitialization(IsaDma *obj, int nchan)
 }
 #endif
 
-void i8257_dma_hold_DREQ(IsaDma *obj, int nchan)
+void __not_in_flash_func(i8257_dma_hold_DREQ)(IsaDma *obj, int nchan)
 {
     I8257State *d = I8257(obj);
     int ichan;
