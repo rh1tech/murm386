@@ -417,10 +417,10 @@ static void __time_critical_func(render_gfx_line_cga)(uint32_t line, uint8_t *ou
             uint32_t vga_addr = ((cga_addr & ~1) << 1) | (cga_addr & 1);
             uint8_t byte = src[vga_addr];
             // Extract 4 pixels (2 bits each), MSB first
-            ob ( (byte >> 6) & 3 );
-            ob ( (byte >> 4) & 3 );
-            ob ( (byte >> 2) & 3 );
-            ob ( byte & 3 );
+            *output_buffer++ = (byte >> 6) & 3;
+            *output_buffer++ = (byte >> 4) & 3;
+            *output_buffer++ = (byte >> 2) & 3;
+            *output_buffer++ = byte & 3;
         }
     }
 }
@@ -461,29 +461,23 @@ static void __time_critical_func(render_gfx_line_cga2)(uint32_t line, uint8_t *o
 
             // Extract 8 pixels (1 bit each), MSB first
             // Output directly (no horizontal doubling since 640 is native width)
-            ob ( ((byte >> 7) << 1) | ((byte >> 6) & 1) );
-            ob ( (((byte >> 5) & 1) << 1) | ((byte >> 4) & 1) );
-            ob ( (((byte >> 3) & 1) << 1) | ((byte >> 2) & 1) );
-            ob ( (((byte >> 1) & 1) << 1) | (byte & 1) );
+            *output_buffer++ = ((byte >> 7) << 1) | ((byte >> 6) & 1);
+            *output_buffer++ = (((byte >> 5) & 1) << 1) | ((byte >> 4) & 1);
+            *output_buffer++ = (((byte >> 3) & 1) << 1) | ((byte >> 2) & 1);
+            *output_buffer++ = (((byte >> 1) & 1) << 1) | (byte & 1);
         }
     }
 }
 
 // Spread 8 bits of a byte into positions 0,4,8,...28
-static inline uint32_t spread8(uint32_t plane) {
-    plane = (plane | (plane << 12)) & 0x000F000Fu;
-    plane = (plane | (plane <<  6)) & 0x03030303u;
-    plane = (plane | (plane <<  3)) & 0x11111111u;
-    return plane;
-}
+extern uint32_t spread8_lut[256];
 
 // Merge 4 plane bytes [P3|P2|P1|P0] into 8 nibbles (pixel color indices).
 static inline uint32_t ega_pack8_from_planes(const uint32_t ega_planes) {
-    const uint32_t pixel1 = spread8(ega_planes        & 0xFFu);
-    const uint32_t pixel2 = spread8((ega_planes >> 8) & 0xFFu);
-    const uint32_t pixel3 = spread8((ega_planes >>16) & 0xFFu);
-    const uint32_t pixel4 = spread8(ega_planes >>24);
-
+    const uint32_t pixel1 = spread8_lut[ega_planes        & 0xFFu];
+    const uint32_t pixel2 = spread8_lut[(ega_planes >> 8) & 0xFFu];
+    const uint32_t pixel3 = spread8_lut[(ega_planes >>16) & 0xFFu];
+    const uint32_t pixel4 = spread8_lut[ega_planes >>24];
     return pixel1 | pixel2 << 1 | pixel3 << 2 | pixel4 << 3;
 }
 
@@ -559,14 +553,14 @@ static inline uint32_t ega_pack8_from_planes(const uint32_t ega_planes) {
             }
 
             // Lookup and double each pixel
-            ob ( eight_pixels >> 28 );
-            ob ( (eight_pixels >> 24) & 0xF );
-            ob ( (eight_pixels >> 20) & 0xF );
-            ob ( (eight_pixels >> 16) & 0xF );
-            ob ( (eight_pixels >> 12) & 0xF );
-            ob ( (eight_pixels >> 8) & 0xF );
-            ob ( (eight_pixels >> 4) & 0xF );
-            ob ( eight_pixels & 0xF );
+            *output_buffer++ = eight_pixels >> 28;
+            *output_buffer++ = (eight_pixels >> 24) & 0xF;
+            *output_buffer++ = (eight_pixels >> 20) & 0xF;
+            *output_buffer++ = (eight_pixels >> 16) & 0xF;
+            *output_buffer++ = (eight_pixels >> 12) & 0xF;
+            *output_buffer++ = (eight_pixels >> 8) & 0xF;
+            *output_buffer++ = (eight_pixels >> 4) & 0xF;
+            *output_buffer++ = eight_pixels & 0xF;
         }
     } else {
         // 640-wide mode: no horizontal doubling
