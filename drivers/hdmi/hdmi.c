@@ -318,6 +318,36 @@ static void __time_critical_func(render_gfx_line_from_sram)(uint32_t line, uint8
     }
 }
 
+// Render VGA 256-color planar (Mode X: 320x200x256, unchained)
+// VRAM layout in our emulator: packed planes in dwords.
+// Each dword holds 4 bytes: plane0..plane3, and those bytes are pixels x%4.
+static void __time_critical_func(render_gfx_line_vga_planar256)(uint32_t line, uint8_t *output_buffer) {
+    int active_lines = active_end - active_start;
+    uint32_t src_line = (gfx_height * 2 <= active_lines) ? (line >> 1) : line;
+    if (src_line >= (uint32_t)gfx_height) {
+        nf_memset(output_buffer, 0, SCREEN_WIDTH);
+        return;
+    }
+    // CRTC Offset (CR13) in words -> dword stride
+    uint32_t stride = (gfx_line_offset > 0) ? ((uint32_t)gfx_line_offset * 2u) : 80u;
+    uint32_t base;
+    // frame_line_compare is in display-line units (same as `line` parameter).
+    // Compare against `line` (not src_line) to get the right split point.
+    if (frame_line_compare >= 0 && (int)line >= frame_line_compare) {
+        uint32_t lc_src = (gfx_height * 2 <= active_lines) ? (uint32_t)frame_line_compare >> 1
+                                                           : (uint32_t)frame_line_compare;
+        base = (src_line - lc_src) * stride;
+    } else {
+        base = frame_vram_offset + src_line * stride;
+    }
+    base &= 0xFFFF;
+    // base is in dwords; gfx_buffer is bytes, so byte offset = base * 4
+    const uint8_t *src = gfx_buffer + (base << 2);
+    for (int i = 0; i < SCREEN_WIDTH; ++i) {
+        ob( *src++ );
+    }
+}
+
 // Render OSD overlay onto a scanline
 // This is called from the ISR, so it must be fast
 void __time_critical_func(osd_render_line_hdmi)(uint32_t line, uint8_t *output_buffer) {
@@ -388,13 +418,11 @@ nf_memset(output_buffer, 0x99, SCREEN_WIDTH);
         }
         if (submode == 5) {
             // VGA 256-color planar (Mode X)
-//            render_gfx_line_vga_planar256(line, output_buffer);
-render_text_line(line, output_buffer);
+            render_gfx_line_vga_planar256(line, output_buffer);
             return;
         }
-            // VGA 256-color (mode 13h) - default
+        // VGA 256-color (mode 13h) - default
         render_gfx_line_from_sram(line, output_buffer);
-//nf_memset(output_buffer, 0x88, SCREEN_WIDTH);
         return;
     }
     // mode 0 - blank screen (gray?)
