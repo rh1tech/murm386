@@ -486,6 +486,7 @@ static void __time_critical_func(render_gfx_line_cga2)(uint32_t line, uint32_t *
     }
 }
 
+uint32_t __scratch_y("spread8_lut") spread8_lut[256];
 // Spread 8 bits of a byte into positions 0,4,8,...28
 static inline uint32_t spread8(uint32_t plane) {
     plane = (plane | (plane << 12)) & 0x000F000Fu;
@@ -496,10 +497,10 @@ static inline uint32_t spread8(uint32_t plane) {
 
 // Merge 4 plane bytes [P3|P2|P1|P0] into 8 nibbles (pixel color indices).
 static inline uint32_t ega_pack8_from_planes(const uint32_t ega_planes) {
-    const uint32_t pixel1 = spread8(ega_planes        & 0xFFu);
-    const uint32_t pixel2 = spread8((ega_planes >> 8) & 0xFFu);
-    const uint32_t pixel3 = spread8((ega_planes >>16) & 0xFFu);
-    const uint32_t pixel4 = spread8(ega_planes >>24);
+    const uint32_t pixel1 = spread8_lut[ega_planes        & 0xFFu];
+    const uint32_t pixel2 = spread8_lut[(ega_planes >> 8) & 0xFFu];
+    const uint32_t pixel3 = spread8_lut[(ega_planes >> 16) & 0xFFu];
+    const uint32_t pixel4 = spread8_lut[ega_planes >> 24];
 
     return pixel1 | pixel2 << 1 | pixel3 << 2 | pixel4 << 3;
 }
@@ -1033,6 +1034,9 @@ static void __isr __time_critical_func(dma_handler_vga)(void) {
 int testPins(uint32_t pin0, uint32_t pin1);
 void graphics_init_hdmi();
 void vga_hw_init(void) {
+    for(uint32_t i = 0; i < 256; ++i) {
+        spread8_lut[i] = spread8(i);
+    }
     uint8_t linkVGA01 = testPins(VGA_BASE_PIN, VGA_BASE_PIN + 1);
     #if defined(BOARD_Z0) || defined(BOARD_Z2) || defined(BOARD_DV)
         SELECT_VGA = linkVGA01 == 0x1F;
