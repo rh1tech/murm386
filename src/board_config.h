@@ -43,7 +43,7 @@
  */
 
 // Default to M1 if no config specified
-#if !defined(BOARD_M1) && !defined(BOARD_M2) && !defined(BOARD_PC)
+#if !defined(BOARD_M1) && !defined(BOARD_M2) && !defined(BOARD_PC) && !defined(BOARD_Z2)
 #define BOARD_M1
 #endif
 
@@ -253,6 +253,49 @@ static inline uint get_psram_pin(void) {
 
 #endif // BOARD_PC
 
+//=============================================================================
+// Waveshare RP2350-PiZero Layout Configuration
+//=============================================================================
+#ifdef BOARD_Z2
+
+// HDMI Pins
+#define HDMI_PIN_CLKN 32
+
+#define HDMI_BASE_PIN HDMI_PIN_CLKN
+
+// SD Card Pins
+#define SDCARD_PIN_CLK    30
+#define SDCARD_PIN_CMD    31
+#define SDCARD_PIN_D0     40
+#define SDCARD_PIN_D3     43
+
+#define SDCARD_PIN_SPI0_SCK   SDCARD_PIN_CLK
+#define SDCARD_PIN_SPI0_MOSI  SDCARD_PIN_CMD
+#define SDCARD_PIN_SPI0_MISO  SDCARD_PIN_D0
+#define SDCARD_PIN_SPI0_CS    SDCARD_PIN_D3
+
+// PS/2 Keyboard Pins
+#define PS2_PIN_CLK  2
+#define PS2_PIN_DATA 3
+
+// NES/SNES Gamepad Pins
+#define NESPAD_GPIO_CLK   4
+#define NESPAD_GPIO_DATA  6
+#define NESPAD_GPIO_LATCH 7
+
+// PS/2 Mouse Pins (if available)
+#define PS2_MOUSE_CLK  0
+#define PS2_MOUSE_DATA 1
+
+// I2S Audio Pins
+#define I2S_DATA_PIN       10
+#define I2S_CLOCK_PIN_BASE 11
+
+#define PWM_RIGHT_PIN 10
+#define PWM_LEFT_PIN 11
+#define BEEPER_PIN 12
+
+#endif // BOARD_PC
 
 //=============================================================================
 // Common PIO Assignments
