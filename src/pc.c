@@ -703,7 +703,7 @@ PC *pc_new(SimpleFBDrawFunc *redraw, void (*poll)(void *), void *redraw_data,
 	   u8 *fb, PCConfig *conf)
 {
 	PC *pc = malloc(sizeof(PC));
-	char *mem = bigmalloc(conf->mem_size);
+	char *mem = (uint8_t*)0x11000000; //bigmalloc(conf->mem_size);
 	CPU_CB *cb = NULL;
 	memset(mem, 0, conf->mem_size);
 #ifdef BUILD_ESP32

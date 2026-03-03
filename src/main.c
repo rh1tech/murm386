@@ -194,37 +194,7 @@ uint32_t __not_in_flash_func(get_uticks)(void) {
  * Allocate memory (uses PSRAM for large allocations).
  */
 void *pcmalloc(long size) {
-    // For small allocations, use regular malloc
-    if (size <= 2 * 4096) {
-        return malloc(size);
-    }
-    // For large allocations, use PSRAM
-    return bigmalloc(size);
-}
-
-/**
- * Allocate large memory block from PSRAM.
- */
-static uint8_t *psram_alloc_ptr = NULL;
-
-void *bigmalloc(size_t size) {
-    if (!psram_alloc_ptr) {
-        psram_alloc_ptr = (uint8_t *)PSRAM_BASE_ADDR;
-    }
-
-    // Align to 4 bytes
-    size = (size + 3) & ~3;
-
-    void *ptr = psram_alloc_ptr;
-    psram_alloc_ptr += size;
-
-    // Check bounds
-    if ((uintptr_t)psram_alloc_ptr > (PSRAM_BASE_ADDR + PSRAM_SIZE_BYTES)) {
-        printf("ERROR: PSRAM allocation overflow!\n");
-        return NULL;
-    }
-
-    return ptr;
+    return malloc(size);
 }
 
 /**

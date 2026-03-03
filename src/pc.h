@@ -23,7 +23,6 @@
 /// Platform HAL
 uint32_t get_uticks();
 void *pcmalloc(long size);
-void *bigmalloc(size_t size);
 int load_rom(void *phys_mem, const char *file, uword addr, int backward);
 
 /// PC
