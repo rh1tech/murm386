@@ -42,8 +42,8 @@ typedef enum {
 } SettingItem;
 
 // Option values
-static const int mem_options[] = { 1, 2, 4 };
-static const int mem_option_count = 3;
+static const int mem_options[] = { 1, 2, 4, 8 };
+static const int mem_option_count = 4;
 
 static const int cpu_options[] = { 3, 4, 5 };
 static const int cpu_option_count = 3;
