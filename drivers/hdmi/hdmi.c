@@ -233,7 +233,7 @@ static inline void* __not_in_flash_func(nf_memset)(void* ptr, int value, size_t 
 #define is_hdmi_sync(c) (c >= HDMI_CTRL_0)
 // ^ just faster than:
 //#define is_hdmi_sync(c) (c == HDMI_CTRL_0 || c == HDMI_CTRL_1 || c == HDMI_CTRL_2 || c == HDMI_CTRL_3)
-#define ob(x) { register uint8_t c = x; *output_buffer++ = is_hdmi_sync(c) ? (c & 0x7F) : c; }
+#define ob(x) { register uint8_t c = x; *output_buffer++ = is_hdmi_sync(c) ? (HDMI_CTRL_0 - 1) : c; }
 
 static void __time_critical_func(render_text_line)(uint32_t line, uint8_t *output_buffer) {
     uint32_t char_row = line >> 4; // div 16
