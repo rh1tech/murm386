@@ -14,6 +14,7 @@
 #include "../drivers/vga/vga_osd.h"
 #include <string.h>
 #include <stdio.h>
+#include "audio.h"
 
 // Menu states
 typedef enum {
@@ -24,7 +25,8 @@ typedef enum {
 
 // Setting items
 typedef enum {
-    SETTING_MEM = 0,
+    SETTING_VOL= 0,
+    SETTING_MEM,
     SETTING_CPU,
     SETTING_FPU,
     SETTING_FILL_CMOS,
@@ -42,6 +44,14 @@ typedef enum {
 } SettingItem;
 
 // Option values
+#if FEATURE_AUDIO_I2S
+static const int vol_options[] = { 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0 };
+static const int vol_option_count = 17;
+#else
+static const int vol_options[] = { 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0 };
+static const int vol_option_count = 13;
+#endif
+
 static const int mem_options[] = { 1, 2, 4, 8 };
 static const int mem_option_count = 4;
 
@@ -70,8 +80,8 @@ static int orig_cpu_freq, orig_psram_freq;
 #define MENU_X      10
 #define MENU_Y      3
 #define MENU_W      60
-#define MENU_H      18
-#define VISIBLE_ITEMS 11
+#define MENU_H      21
+#define VISIBLE_ITEMS 14
 
 // Forward declarations
 static void draw_settings_menu(void);
@@ -159,6 +169,14 @@ static void cycle_option(int direction) {
     const int *options;
 
     switch (selected_item) {
+        case SETTING_VOL:
+            options = vol_options;
+            count = vol_option_count;
+            idx = find_option_index(options, count, audio_get_volume());
+            idx = (idx + direction + count) % count;
+            audio_set_volume(options[idx]);
+            break;
+
         case SETTING_MEM:
             options = mem_options;
             count = mem_option_count;
@@ -244,6 +262,7 @@ static void draw_settings_menu(void) {
 
     // Settings items
     const char *labels[] = {
+        "Volume:",
         "RAM Size:",
         "CPU Type:",
         "FPU (387):",
@@ -273,6 +292,9 @@ static void draw_settings_menu(void) {
 
         // Format value
         switch (setting_idx) {
+            case SETTING_VOL:
+                snprintf(value, sizeof(value), "< %d >", audio_get_volume());
+                break;
             case SETTING_MEM:
                 snprintf(value, sizeof(value), "< %d MB >", config_get_mem_size_mb());
                 break;

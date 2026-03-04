@@ -55,6 +55,8 @@ void i2s_increase_volume(i2s_config_t *i2s_config);
 void i2s_decrease_volume(i2s_config_t *i2s_config);
 
 void audio_set_enabled(bool);
+void audio_set_volume(uint8_t);
+uint8_t audio_get_volume(void);
 void audio_init(void);
 
 #ifdef __cplusplus
