@@ -173,16 +173,42 @@ static i2s_config_t i2s_config;
 static pwm_config pwm;
 #endif
 
+static uint8_t prev = 0;
 void audio_set_enabled(bool v) {
+    if (v) {
+        volume = prev;
+    } else {
+        prev = volume;
+#if FEATURE_AUDIO_PWM
+        volume = 12;
+#else
+        volume = 16;
+#endif
+    }
+}
+
+void audio_set_volume(uint8_t vol) {
 #if FEATURE_AUDIO_I2S
-    volume = v ? 0 : 16;
+    prev = 16 - vol;
 #elif FEATURE_AUDIO_PWM
-    volume = v ? 0 : 12;
+    prev = 12 - vol;
 #elif FEATURE_AUDIO_HW
 // TODO: ?
-    volume = v ? 0 : 16;
+    prev = 12 - vol;
 #endif
 }
+
+uint8_t audio_get_volume(void) {
+#if FEATURE_AUDIO_I2S
+    return 16 - prev;
+#elif FEATURE_AUDIO_PWM
+    return 12 - prev;
+#elif FEATURE_AUDIO_HW
+// TODO: ?
+    return 12 - prev;
+#endif
+}
+
 
 void audio_init(void) {
 #if FEATURE_AUDIO_I2S
@@ -279,15 +305,15 @@ bool __not_in_flash_func(timer_callback)(repeating_timer_t *rt) {
             b_v = b_v ? (4095 >> volume) : 0;
             pwm_set_gpio_level(BEEPER_PIN, b_v);
         #else
-            if (b_v) { r_v = l_v = 0x7FFF; }
+            if (b_v) { r_v = l_v = 32767; }
         #endif
         pwm_set_gpio_level(PWM_RIGHT_PIN, ur_v);
         pwm_set_gpio_level(PWM_LEFT_PIN, ul_v);
     #elif FEATURE_AUDIO_I2S
-        if (b_v) { r_v = l_v = 0x7FFF; }
-        if (r_v > 0x7FFF) r_v = 0x7FFF;
+        if (b_v) { r_v = l_v = 32767; }
+        if (r_v > 32767) r_v = 32767;
         if (r_v < -32768) r_v = -32768;
-        if (l_v > 0x7FFF) l_v = 0x7FFF;
+        if (l_v > 32767) l_v = 32767;
         if (l_v < -32768) l_v = -32768;
         samples[0] = r_v;
         samples[1] = l_v;
