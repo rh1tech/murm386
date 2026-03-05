@@ -26,7 +26,10 @@ struct struct_drive {
     uint8_t readonly;
     uint8_t iscdrom;
     uint8_t drive_type;  /* BIOS/CMOS type: 1=360K 2=1.2M 3=720K 4=1.44M 5=2.88M */  // CD-ROM flag for drive E:
-} disk[5];  // 0-1: floppy, 2-3: HDD, 4: CD-ROM
+} disk[5] = {
+    [0] = { .drive_type = 4 },  // A: floppy, default 1.44M
+    [1] = { .drive_type = 4 },  // B: floppy, default 1.44M
+};  // 0-1: floppy, 2-3: HDD, 4: CD-ROM
 
 static int led_state = 0;
 static CPUI386 *disk_cpu = NULL;
@@ -64,7 +67,7 @@ void disk_set_cpu(CPUI386 *cpu) {
 void disk_set_filename(uint8_t drivenum, const char *filename);
 
 static inline void ejectdisk(uint8_t drivenum) {
-    if (drivenum & 0x80) drivenum -= 126;
+    if (drivenum & 0x80) drivenum = (uint8_t)(2u + (drivenum & 0x7Fu));
 
     if (disk[drivenum].inserted) {
         f_close(&disk[drivenum].diskfile);
@@ -81,8 +84,8 @@ static inline void ejectdisk(uint8_t drivenum) {
 uint8_t insertdisk(uint8_t drivenum, const char *pathname) {
     FIL file;
 
-    if (drivenum & 0x80) drivenum -= 126;  // Normalize hard drive numbers
-    if (drivenum > 5) return false;
+    if (drivenum & 0x80) drivenum = (uint8_t)(2u + (drivenum & 0x7Fu));
+    if (drivenum >= 5) return false;
 
     // Build full path (files are in 386/ directory)
     char path[256];
@@ -379,11 +382,9 @@ void diskhandler(CPUI386 *cpu) {
     // tries to access drive C:.
     disk_mem[0x475] = hdcount;
 
-    uint8_t drivenum = cpu_get_dl(cpu);
+    uint8_t dl_orig  = cpu_get_dl(cpu);
+    uint8_t drivenum = (dl_orig & 0x80) ? (uint8_t)(2u + (dl_orig & 0x7Fu)) : dl_orig;
     uint8_t ah = cpu_get_ah(cpu);
-
-    // Normalize drivenum for hard drives
-    if (drivenum & 0x80) drivenum -= 126;
 
     // Handle the interrupt service based on the function requested in AH
     switch (ah) {
@@ -432,31 +433,50 @@ void diskhandler(CPUI386 *cpu) {
             cpu_set_ah(cpu, 0);
             break;
 
-        case 0x08:  // Get drive parameters
-            if (disk[drivenum].inserted) {
-                cpu_set_cf(cpu, 0);
-                cpu_set_ah(cpu, 0);
-                cpu_set_ch(cpu, disk[drivenum].cyls - 1);
-                cpu_set_cl(cpu, (disk[drivenum].sects & 63) + ((disk[drivenum].cyls / 256) * 64));
-                cpu_set_dh(cpu, disk[drivenum].heads - 1);
-// TODO: DDP
-                // ES:DI = 0000:0000 (нет таблицы параметров)
-//                cpu->seg[0].sel  = 0; // ES = 0
-//                cpu->seg[0].base = 0;
-//                cpu->gprx[7].r16 = 0; // DI = 0
-
-                // Set DL and BL for floppy or hard drive
-                if (cpu_get_dl(cpu) < 2) {
-                    cpu_set_bl(cpu, disk[drivenum].drive_type ? disk[drivenum].drive_type : 4);
-                    cpu_set_dl(cpu, 2);  // We have 2 drives
-                } else {
-                    cpu_set_dl(cpu, hdcount);  // Hard disk
+        case 0x08: {  // Get drive parameters
+            // AH=08h описывает дисковод (железо), а не вставленную дискету.
+            // Для флоппи отвечаем всегда: drive_type инициализирован в 4 (1.44M)
+            // и обновляется при каждом mount, но не сбрасывается при unmount.
+            if (dl_orig & 0x80) {
+                // HDD — отвечаем только если диск вставлен
+                if (!disk[drivenum].inserted) {
+                    cpu_set_cf(cpu, 1);
+                    cpu_set_ah(cpu, 0x07);
+                    break;
                 }
+                uint16_t mc = disk[drivenum].cyls - 1u;
+                cpu_set_cf(cpu, 0); cpu_set_ah(cpu, 0);
+                cpu_set_ch(cpu, (uint8_t)(mc & 0xFFu));
+                cpu_set_cl(cpu, (uint8_t)((disk[drivenum].sects & 0x3Fu) | (((mc >> 8) & 0x03u) << 6)));
+                cpu_set_dh(cpu, disk[drivenum].heads - 1);
+                cpu_set_dl(cpu, hdcount);
             } else {
-                cpu_set_cf(cpu, 1);
-                cpu_set_ah(cpu, 0xAA);  // Error code for no disk inserted
+                // Флоппи — всегда отвечаем; геометрия из вставленной дискеты
+                // или максимальная для данного типа дисковода (если пусто).
+                static const uint8_t fd_geom[6][3] = {
+                    /* type  cyls heads sects */
+                    /* 0 */  { 80, 2, 18 },  // неизвестно — считаем 1.44M
+                    /* 1 */  { 40, 2,  9 },  // 360K
+                    /* 2 */  { 80, 2, 15 },  // 1.2M
+                    /* 3 */  { 80, 2,  9 },  // 720K
+                    /* 4 */  { 80, 2, 18 },  // 1.44M
+                    /* 5 */  { 80, 2, 36 },  // 2.88M
+                };
+                uint8_t dt = disk[drivenum].drive_type;
+                if (dt > 5) dt = 4;
+                uint16_t cyls  = disk[drivenum].inserted ? disk[drivenum].cyls  : fd_geom[dt][0];
+                uint8_t  heads = disk[drivenum].inserted ? disk[drivenum].heads : fd_geom[dt][1];
+                uint8_t  sects = disk[drivenum].inserted ? disk[drivenum].sects : fd_geom[dt][2];
+                uint16_t mc = cyls - 1u;
+                cpu_set_cf(cpu, 0); cpu_set_ah(cpu, 0);
+                cpu_set_ch(cpu, (uint8_t)(mc & 0xFFu));
+                cpu_set_cl(cpu, (uint8_t)((sects & 0x3Fu) | (((mc >> 8) & 0x03u) << 6)));
+                cpu_set_dh(cpu, heads - 1);
+                cpu_set_bl(cpu, dt);       // тип дисковода
+                cpu_set_dl(cpu, fdcount);  // количество флоппи-дисководов
             }
             break;
+        }
 /* TODO:
         case 0x41:  // Check Extensions Present
             if (drivenum >= 2) {
@@ -479,7 +499,7 @@ void diskhandler(CPUI386 *cpu) {
     lastdiskcf[drivenum] = cpu_get_cf(cpu);
 
     // Set the last status in BIOS Data Area (for hard drives)
-    if (cpu_get_dl(cpu) & 0x80) {
+    if (dl_orig & 0x80) {
         disk_mem[0x474] = cpu_get_ah(cpu);
     }
 }
