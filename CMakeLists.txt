@@ -354,7 +354,6 @@ target_compile_options(${BUILD_NAME} PRIVATE
     -O3
     -ffunction-sections
     -fdata-sections
-    -fms-extensions
 )
 
 # ARM assembly flags for Cortex-M33
