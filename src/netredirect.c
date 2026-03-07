@@ -257,6 +257,7 @@ static bool redirector_handler_impl() {
     static FILINFO find_fileinfo;
 
 
+    SET_CPU_FL_CF(0); /* default: success, handlers override for errors */
     switch (CPU_AX) {
         case 0x1100: // Installation Check
             if (!sda_addr) {
@@ -724,11 +725,10 @@ static void int2f_callback(CPUI386 *cpu, void *opaque) {
         cpu_set_cf(cpu, 1); /* not handled, let BIOS chain */
         return;
     }
-    if (redirector_handler_impl()) {
-        cpu_set_cf(cpu, 0);
-    } else {
-        cpu_set_cf(cpu, 1);
+    if (!redirector_handler_impl()) {
+        cpu_set_cf(cpu, 1); /* unimplemented - let BIOS chain */
     }
+    /* if handled, CF was already set by the handler itself */
 }
 
 void netredirect_init(CPUI386 *cpu) {
