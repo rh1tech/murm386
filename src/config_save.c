@@ -35,6 +35,7 @@ static int cfg_dss = 0;
 static int cfg_mouse = 1;
 static int cfg_cpu_freq = CPU_CLOCK_MHZ;
 static int cfg_psram_freq = PSRAM_MAX_FREQ_MHZ;
+static int cfg_flash_freq = FLASH_MAX_FREQ_MHZ;
 static bool cfg_hw_changed = false;
 
 extern PC *pc;
@@ -177,6 +178,14 @@ void config_set_psram_freq(int mhz) {
         cfg_hw_changed = true;
     }
 }
+int config_get_flash_freq(void) { return cfg_flash_freq; }
+void config_set_flash_freq(int mhz) {
+    if (cfg_flash_freq != mhz) {
+        cfg_flash_freq = mhz;
+        cfg_changed = true;
+        cfg_hw_changed = true;
+    }
+}
 
 bool config_hw_changed(void) { return cfg_hw_changed; }
 bool config_has_changes(void) { return cfg_changed; }
@@ -269,6 +278,8 @@ bool config_save_all(void) {
     write_line(&fp, line);
     snprintf(line, sizeof(line), "psram_freq=%d\n", cfg_psram_freq);
     write_line(&fp, line);
+    snprintf(line, sizeof(line), "flash_freq=%d\n", cfg_flash_freq);
+    write_line(&fp, line);
 
     f_close(&fp);
     cfg_changed = false;
@@ -304,11 +315,12 @@ int parse_murm386_ini(void* user, const char* section,
         cfg_dss = atoi(value);
     } else if (strcmp(name, "mouse") == 0) {
         cfg_mouse = atoi(value);
-/// TODO: it breaks REINIT vga clk?
     } else if (strcmp(name, "cpu_freq") == 0) {
         cfg_cpu_freq = atoi(value);
     } else if (strcmp(name, "psram_freq") == 0) {
         cfg_psram_freq = atoi(value);
+    } else if (strcmp(name, "flash_freq") == 0) {
+        cfg_flash_freq = atoi(value);
     }
 
     return 1;  // Success

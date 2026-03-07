@@ -62,6 +62,10 @@
 #define PSRAM_MAX_FREQ_MHZ 133
 #endif
 
+#ifndef FLASH_MAX_FREQ_MHZ
+#define FLASH_MAX_FREQ_MHZ 66
+#endif
+
 //=============================================================================
 // PSRAM Pin Auto-Detection
 //=============================================================================
