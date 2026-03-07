@@ -40,6 +40,7 @@ typedef enum {
     SETTING_MOUSE,
     SETTING_CPU_FREQ,
     SETTING_PSRAM_FREQ,
+    SETTING_FLASH_FREQ,
     SETTING_COUNT
 } SettingItem;
 
@@ -68,6 +69,9 @@ static const int cpu_freq_option_count = 3;
 static const int psram_freq_options[] = { 166, 133, 100, 84, 66 };
 static const int psram_freq_option_count = 5;
 
+static const int flash_freq_options[] = { 166, 133, 100, 84, 66 };
+static const int flash_freq_option_count = 5;
+
 // State
 static SettingsState settings_state = SETTINGS_CLOSED;
 static int selected_item = 0;
@@ -78,14 +82,14 @@ static int plasma_frame = 0;  // Animation frame counter
 // Original values (to detect changes)
 static int orig_mem, orig_cpu, orig_fpu, orig_fill_cmos;
 static int orig_pcspeaker, orig_adlib, orig_soundblaster, orig_tandy, orig_covox, orig_dss, orig_mouse, orig_mpu401;
-static int orig_cpu_freq, orig_psram_freq;
+static int orig_cpu_freq, orig_psram_freq, orig_flash_freq;
 
 // UI dimensions
 #define MENU_X      10
 #define MENU_Y      1
 #define MENU_W      60
-#define MENU_H      21
-#define VISIBLE_ITEMS 15
+#define MENU_H      23
+#define VISIBLE_ITEMS 16
 
 // Forward declarations
 static void draw_settings_menu(void);
@@ -116,6 +120,7 @@ void settingsui_open(void) {
     orig_mouse = config_get_mouse();
     orig_cpu_freq = config_get_cpu_freq();
     orig_psram_freq = config_get_psram_freq();
+    orig_flash_freq = config_get_flash_freq();
 
     settings_state = SETTINGS_MAIN;
     selected_item = 0;
@@ -132,17 +137,9 @@ void settingsui_close(void) {
         config_set_cpu_gen(orig_cpu);
         config_set_fpu(orig_fpu);
         config_set_fill_cmos(orig_fill_cmos);
-        // do not recover not "critical", just allow to change 'em without apply
-    //    config_set_pcspeaker(orig_pcspeaker);
-    //    config_set_adlib(orig_adlib);
-    //    config_set_soundblaster(orig_soundblaster);
-    //    config_set_tandy(orig_tandy);
-    //    config_set_covox(orig_covox);
-    //    config_set_mpu401(orig_mpu401);
-    //    config_set_dss(orig_dss);
-    //    config_set_mouse(orig_mouse);
         config_set_cpu_freq(orig_cpu_freq);
         config_set_psram_freq(orig_psram_freq);
+        config_set_flash_freq(orig_flash_freq);
         config_clear_changes();
     }
     settings_state = SETTINGS_CLOSED;
@@ -252,6 +249,14 @@ static void cycle_option(int direction) {
             idx = (idx + direction + count) % count;
             config_set_psram_freq(options[idx]);
             break;
+
+        case SETTING_FLASH_FREQ:
+            options = flash_freq_options;
+            count = flash_freq_option_count;
+            idx = find_option_index(options, count, config_get_flash_freq());
+            idx = (idx + direction + count) % count;
+            config_set_flash_freq(options[idx]);
+            break;
     }
 }
 
@@ -280,7 +285,8 @@ static void draw_settings_menu(void) {
         "Disney Sound Source:",
         "Mouse:",
         "RP2350 Freq:",
-        "PSRAM Freq:"
+        "PSRAM Freq:",
+        "Flash Freq:"
     };
     char value[24];
 
@@ -340,6 +346,9 @@ static void draw_settings_menu(void) {
                 break;
             case SETTING_PSRAM_FREQ:
                 snprintf(value, sizeof(value), "< %d MHz >", config_get_psram_freq());
+                break;
+            case SETTING_FLASH_FREQ:
+                snprintf(value, sizeof(value), "< %d MHz >", config_get_flash_freq());
                 break;
         }
         osd_print(MENU_X + 25, y, value, attr);

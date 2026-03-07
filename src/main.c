@@ -526,11 +526,9 @@ static int load_config_from_sd(const char *filename) {
 //=============================================================================
 
 // Flash timing configuration for overclocking
-#define FLASH_MAX_FREQ_MHZ 66
-
-void __no_inline_not_in_flash_func(set_flash_timings)(int cpu_mhz) {
+void __no_inline_not_in_flash_func(set_flash_timings)(int cpu_mhz, int cfg_flash) {
     const int clock_hz = cpu_mhz * 1000000;
-    const int max_flash_freq = FLASH_MAX_FREQ_MHZ * 1000000;
+    const int max_flash_freq = cfg_flash * 1000000;
 
     int divisor = (clock_hz + max_flash_freq - (max_flash_freq >> 4) - 1) / max_flash_freq;
     if (divisor == 1 && clock_hz >= 166000000) {
@@ -581,11 +579,11 @@ static enum vreg_voltage get_voltage_for_freq(int mhz) {
  * Reconfigure clocks at runtime based on INI settings.
  * This function MUST run from RAM, not flash.
  */
-static void __no_inline_not_in_flash_func(reconfigure_clocks)(int cpu_mhz, int psram_mhz, uint psram_pin) {
+static void __no_inline_not_in_flash_func(reconfigure_clocks)(int cpu_mhz, int psram_mhz, uint psram_pin, int cfg_flash) {
     int current_mhz = clock_get_hz(clk_sys) / 1000000;
 
-    DBG_PRINT("Reconfiguring clocks: %d MHz -> %d MHz, PSRAM: %d MHz\n",
-              current_mhz, cpu_mhz, psram_mhz);
+    DBG_PRINT("Reconfiguring clocks: %d MHz -> %d MHz, PSRAM: %d MHz, FLASH: %d\n",
+              current_mhz, cpu_mhz, psram_mhz, cfg_flash);
 
     // Only change system clock if CPU frequency actually differs.
     // Unnecessary PLL reconfiguration disrupts PIO timing (HDMI, audio).
@@ -595,7 +593,7 @@ static void __no_inline_not_in_flash_func(reconfigure_clocks)(int cpu_mhz, int p
 
         if (lowering) {
             // LOWERING: clock first, then voltage (safe order)
-            set_flash_timings(cpu_mhz);
+            set_flash_timings(cpu_mhz, cfg_flash);
             set_sys_clock_khz(cpu_mhz * 1000, false);
             sleep_ms(10);
             vreg_set_voltage(new_voltage);
@@ -604,7 +602,7 @@ static void __no_inline_not_in_flash_func(reconfigure_clocks)(int cpu_mhz, int p
             vreg_disable_voltage_limit();
             vreg_set_voltage(new_voltage);
             sleep_ms(50);  // Stabilization delay
-            set_flash_timings(cpu_mhz);
+            set_flash_timings(cpu_mhz, cfg_flash);
             set_sys_clock_khz(cpu_mhz * 1000, false);
         }
     }
@@ -696,6 +694,7 @@ static bool init_hardware(void) {
         // Check if clock reconfiguration is needed
         int cfg_cpu = config_get_cpu_freq();
         int cfg_psram = config_get_psram_freq();
+        int cfg_flash = config_get_flash_freq();
         // If HDMI boosted the clock (to 504 MHz for jitter-free TMDS),
         // keep it — only reconfigure PSRAM frequency.
         extern bool SELECT_VGA;
@@ -703,8 +702,8 @@ static bool init_hardware(void) {
         if (!SELECT_VGA && cur_mhz > cfg_cpu) {
             cfg_cpu = cur_mhz;  // preserve HDMI-boosted clock
         }
-        if (cfg_cpu != CPU_CLOCK_MHZ || cfg_psram != PSRAM_MAX_FREQ_MHZ) {
-            reconfigure_clocks(cfg_cpu, cfg_psram, psram_pin);
+        if (cfg_cpu != CPU_CLOCK_MHZ || cfg_psram != PSRAM_MAX_FREQ_MHZ || cfg_flash != FLASH_MAX_FREQ_MHZ) {
+            reconfigure_clocks(cfg_cpu, cfg_psram, psram_pin, cfg_flash);
         }
     }
 
@@ -894,8 +893,8 @@ static void show_welcome_screen(void) {
 
     // Hardware info
     char hw_str[48];
-    snprintf(hw_str, sizeof(hw_str), "RP2350 @ %d MHz / PSRAM @ %d MHz",
-             config_get_cpu_freq(), config_get_psram_freq());
+    snprintf(hw_str, sizeof(hw_str), "RP2350 @ %d MHz / PSRAM @ %d MHz / FLASH @ %d MHz",
+             config_get_cpu_freq(), config_get_psram_freq(), config_get_flash_freq());
     osd_print_center(wy + 7, hw_str, OSD_ATTR(OSD_LIGHTCYAN, OSD_BLUE));
 
     // Platform (green text)
