@@ -55,8 +55,8 @@ static int plasma_frame = 0;  // Animation frame counter
 #define FILE_X      12
 #define FILE_Y      7
 #define FILE_W      56
-#define FILE_H      11
-#define FILE_VISIBLE (FILE_H - 2)
+#define FILE_H      13
+#define FILE_VISIBLE (FILE_H - 3)
 
 // Forward declarations
 static void draw_main_menu(void);
