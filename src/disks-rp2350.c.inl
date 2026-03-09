@@ -518,6 +518,11 @@ void disk_set_cdrom(uint8_t drivenum, uint8_t iscdrom) {
     disk[drivenum].iscdrom = iscdrom;
 }
 
+void disk_set_inserted(uint8_t drivenum, uint8_t inserted) {
+    if (drivenum > 4) return;
+    disk[drivenum].inserted = inserted;
+}
+
 // Check if drive is CD-ROM
 uint8_t disk_is_cdrom(uint8_t drivenum) {
     if (drivenum > 4) return 0;

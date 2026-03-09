@@ -1077,13 +1077,19 @@ PC *pc_new(SimpleFBDrawFunc *redraw, void (*poll)(void *), void *redraw_data,
 	 * Pre-attach an empty ATAPI drive so the OS detects the hardware at boot.
 	 * The disc will be inserted later via diskui → cdrom_change_notify. */
 	{
-		const char *cd4 = disk_get_filename(4);
-		if (cd4 && cd4[0]) {
-			/* A disc image was saved in the config — attach it directly */
-			ide_attach_cd(pc->ide2, 1, cd4);
-		} else {
-			/* Attach an empty CD-ROM drive (no disc inserted yet) */
-			ide_attach_cd(pc->ide2, 1, "");
+		/* Drive 4 = CD-ROM E: maps to ide2/drive1 (secondary slave).
+		 * Only attach if that slot wasn't already taken by conf->disks[3]. */
+		bool slot_free = !(conf->disks[3] && conf->disks[3][0]);
+		if (slot_free) {
+			const char *cd4 = disk_get_filename(4);
+			if (cd4 && cd4[0]) {
+				char cd4path[256];
+				snprintf(cd4path, sizeof(cd4path), "386/%s", cd4);
+				if (ide_attach_cd(pc->ide2, 1, cd4path) != 0)
+					ide_attach_cd(pc->ide2, 1, "");
+			} else {
+				ide_attach_cd(pc->ide2, 1, "");
+			}
 		}
 	}
 #endif
@@ -1316,6 +1322,7 @@ int parse_conf_ini(void* user, const char* section,
 			/* CD-ROM E: = diskui runtime drive 4 (secondary slave, ide2/drive1) */
 			disk_set_filename(4, value);
 			disk_set_cdrom(4, 1);
+			disk_set_inserted(4, 1);  /* mark as inserted so GUI shows filename */
 		} else if (NAME("fda")) {
 			conf->fdd[0] = strdup(value);
 		} else if (NAME("fdb")) {
