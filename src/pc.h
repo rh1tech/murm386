@@ -17,7 +17,6 @@
 #include "sb16.h"
 #include "pcspk.h"
 #include "pci.h"
-#include "ide.h"
 #include "ini.h"
 #include "sn76489.h"
 #include "fdd.h"
@@ -34,6 +33,8 @@ typedef CPUKVM CPU;
 #else
 typedef CPUI386 CPU;
 #endif
+
+typedef struct IDEIFState IDEIFState;
 
 typedef struct {
 	CPU *cpu;
@@ -117,7 +118,7 @@ typedef struct {
 	const char *vga_bios;
 	long mem_size;
 	long vga_mem_size;
-	const char *disks[4];
+	const char *ata[4];
 	int iscd[4];
 	const char *fdd[2];
 	int fill_cmos;

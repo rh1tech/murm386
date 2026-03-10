@@ -239,21 +239,19 @@ bool config_save_all(void) {
     // Disks (must be in [pc] section)
     write_line(&fp, "\n; Disk images\n");
     for (int i = 0; i < 2; i++) {
-        const char *fname = disk_get_filename(i);
+        const char *fname = fdd_get_filename(i);
         if (fname && fname[0]) {
             snprintf(line, sizeof(line), "fd%c=%s\n", 'a' + i, fname);
             write_line(&fp, line);
         }
     }
-    for (int i = 2; i < 5; i++) {
-        const char *fname = disk_get_filename(i);
+    for (int i = 0; i < 4; i++) {
+        const char *fname = ata_get_filename(i);
         if (fname && fname[0]) {
-            if (disk_is_cdrom(i)) {
-                /* drives 2,3,4 → 'a','b','e' (skip 'c','d' which are HDD letters) */
-                char cd_letter = (i == 4) ? 'e' : ('a' + (i - 2));
-                snprintf(line, sizeof(line), "cd%c=%s\n", cd_letter, fname);
+            if (ata_is_cdrom(i)) {
+                snprintf(line, sizeof(line), "cd%c=%s\n", 'a' + i, fname);
             } else {
-                snprintf(line, sizeof(line), "hd%c=%s\n", 'a' + (i - 2), fname);
+                snprintf(line, sizeof(line), "hd%c=%s\n", 'a' + i, fname);
             }
             write_line(&fp, line);
         }

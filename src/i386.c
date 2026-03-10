@@ -7392,14 +7392,9 @@ static bool IRAM_ATTR call_isr(CPUI386 *cpu, int no, bool pusherr, int ext)
     uword dbg_old_sp = lreg32(4);
     uword dbg_old_ss = cpu->seg[SEG_SS].sel;
 #endif
-	/* INT 13h disk handler hook - intercept in real mode */
-//	if (no == 0x13 && cpu->int13_handler && !(cpu->cr0 & 1)) {
-//		cpu->int13_handler(cpu, cpu->int13_opaque);
-//		return true;
-//	}
-	if (no == 0x2F && cpu->int2f_handler && !(cpu->cr0 & 1)) {
-		cpu->int2f_handler(cpu, cpu->int2f_opaque);
-		if (cpu_get_cf(cpu) == 0) return true; /* handled */
+	/* INT 2Fh network-attached-drive handler hook - intercept in V86 and real mode */
+	if (no == 0x2F && cpu->int2f_handler && (!(cpu->cr0 & 1) || (cpu->flags & VM))) {
+		if (cpu->int2f_handler(cpu, cpu->int2f_opaque)) return true; /* handled */
 	}
 
 	if (!(cpu->cr0 & 1)) {

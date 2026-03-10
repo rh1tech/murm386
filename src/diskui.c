@@ -120,8 +120,8 @@ static void draw_main_menu(void) {
         osd_print(MENU_X + 2, y, line, attr);
 
         // Current disk name or [empty]
-        const char *filename = disk_get_filename(i);
-        if (disk_is_inserted(i) && filename[0]) {
+        const char *filename = (i < 2) ? fdd_get_filename(i) : ata_get_filename(i - 2);
+        if (filename) {
             // Truncate long filenames
             char truncated[24];
             strncpy(truncated, filename, 23);
@@ -132,7 +132,7 @@ static void draw_main_menu(void) {
         }
 
         // Action hint
-        if (disk_is_inserted(i)) {
+        if (filename) {
             osd_print(MENU_X + MENU_W - 12, y, "[Eject]", attr);
         } else {
             osd_print(MENU_X + MENU_W - 12, y, "[Select]", attr);
@@ -258,13 +258,14 @@ static void select_file(void) {
     const char *filename = file_list[selected_file];
 
     // Insert the disk
-    if (disk_insert(selected_drive, filename)) {
-        // Set CD-ROM flag if applicable
-        if (drive_info[selected_drive].is_cdrom) {
-            disk_set_cdrom(selected_drive, 1);
+    if (selected_drive < 2) {
+        if (insertdisk(selected_drive, true, false, filename)) {
+            config_save_disks();
         }
-        // Save disk configuration to INI file
-        config_save_disks();
+    } else {
+        if (insertdisk(selected_drive - 2, false, selected_drive == 4, filename)) {
+            config_save_disks();
+        }
     }
 
     // Return to main menu
@@ -273,7 +274,11 @@ static void select_file(void) {
 }
 
 static void eject_disk(void) {
-    disk_eject(selected_drive);
+    if (selected_drive < 2) {
+        ejectdisk(selected_drive, false);
+    } else {
+        ejectdisk(selected_drive - 2, true);
+    }
     // Save disk configuration to INI file
     config_save_disks();
     draw_main_menu();
@@ -305,8 +310,9 @@ bool diskui_handle_key(int keycode, bool is_down) {
                     draw_main_menu();
                     break;
 
-                case KEY_ENTER:
-                    if (disk_is_inserted(selected_drive)) {
+                case KEY_ENTER: {
+                    const char *filename = (selected_drive < 2) ? fdd_get_filename(selected_drive) : ata_get_filename(selected_drive - 2);
+                    if (filename) {
                         eject_disk();
                     } else {
                         // Open file browser
@@ -315,7 +321,7 @@ bool diskui_handle_key(int keycode, bool is_down) {
                         draw_file_browser();
                     }
                     break;
-
+                }
                 case KEY_ESC:
                     diskui_close();
                     break;

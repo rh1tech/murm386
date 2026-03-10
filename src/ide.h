@@ -23,41 +23,43 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
-typedef struct BlockDevice BlockDevice;
+#include <stdint.h>
+#include "ff.h"
 
 typedef struct IDEIFState IDEIFState;
 
 IDEIFState *ide_allocate(int irq, void *pic, void (*set_irq)(void *pic, int irq, int level));
+
+/* Attach HDD: opens file internally */
 int ide_attach(IDEIFState *s, int drive, const char *filename);
-int ide_attach_cd(IDEIFState *s, int drive, const char *filename);
-void ide_change_cd(IDEIFState *sif, int drive, const char *filename);
 
-#ifdef RP2350_BUILD
-#include "ff.h"
-/* Attach using already-open FIL* (avoids FatFs double-open) */
-int ide_attach_fil(IDEIFState *s, int drive, FIL *f, size_t filesize, size_t data_offset,
+/* Attach HDD using already-open FIL (avoids FatFS double-open).
+ * Geometry is pre-detected by the disk layer (insertdisk). */
+int ide_attach_ata(IDEIFState *s, int drive, FIL *f,
                    int cylinders, int heads, int sectors);
-#endif
 
-void ide_data_writew(void *opaque, uint32_t val);
+/* Attach empty ATAPI CD-ROM slot (no image loaded yet) */
+int ide_attach_cd(IDEIFState *s, int drive);
+
+/* Returns non-zero if a drive (0=master, 1=slave) is attached */
+int ide_has_drive(IDEIFState *s, int drive);
+
+/* Hot-swap CD image: pass open FIL* on insert, NULL to eject */
+void ide_change_cd(IDEIFState *sif, int drive, FIL *f);
+
+void     ide_data_writew(void *opaque, uint32_t val);
 uint32_t ide_data_readw(void *opaque);
-
-void ide_data_writel(void *opaque, uint32_t val);
+void     ide_data_writel(void *opaque, uint32_t val);
 uint32_t ide_data_readl(void *opaque);
+int      ide_data_write_string(void *opaque, uint8_t *buf, int size, int count);
+int      ide_data_read_string(void *opaque, uint8_t *buf, int size, int count);
 
-int ide_data_write_string(void *opaque, uint8_t *buf, int size, int count);
-int ide_data_read_string(void *opaque, uint8_t *buf, int size, int count);
-
-void ide_ioport_write(void *opaque, uint32_t offset, uint32_t val);
+void     ide_ioport_write(void *opaque, uint32_t offset, uint32_t val);
 uint32_t ide_ioport_read(void *opaque, uint32_t offset);
-
-void ide_cmd_write(void *opaque, uint32_t val);
+void     ide_cmd_write(void *opaque, uint32_t val);
 uint32_t ide_status_read(void *opaque);
 
 #include "pci.h"
 PCIDevice *piix3_ide_init(PCIBus *pci_bus, int devfn);
 
-void ide_fill_cmos(IDEIFState *s, void *cmos,
-                   uint8_t (*set)(void *cmos, int addr, uint8_t val));
 #endif /* IDE_H */

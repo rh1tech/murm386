@@ -1,4 +1,5 @@
 #include "pc.h"
+#include "ide.h"
 #include "dss.h"
 #include "misc.h"
 #include <stdio.h>
@@ -52,7 +53,7 @@ static void emulink_exec(PC *pc)
 			uint8_t  drv  = (uint8_t)pc->emulink.args[0];
 			uint32_t chs  = pc->emulink.args[1];
 			uint32_t cnt  = pc->emulink.args[2];
-			if (drv >= 2 || !disk_is_inserted(drv)) {
+			if (drv >= 2 || !fdd_is_inserted(drv)) {
 				pc->emulink.status = 0x80; /* error */
 				pc->emulink.cmd    = -1;
 				break;
@@ -60,15 +61,15 @@ static void emulink_exec(PC *pc)
 			int c = (int)(chs >> 16);
 			int h = (int)((chs >> 8) & 0xff);
 			int s = (int)(chs & 0xff);
-			uint16_t heads = disk_get_heads(drv);
-			uint16_t sects = disk_get_sects(drv);
+			uint16_t heads = fdd_get_heads(drv);
+			uint16_t sects = fdd_get_sects(drv);
 			if (heads == 0 || sects == 0) {
 				pc->emulink.status = 0x80;
 				pc->emulink.cmd    = -1;
 				break;
 			}
 			uint32_t lba = (uint32_t)(c * heads + h) * sects + (uint32_t)(s - 1);
-			FIL *fil = disk_get_fil(drv);
+			FIL *fil = fdd_get_file(drv);
 			FRESULT fr = f_lseek(fil, lba * 512u);
 			if (fr != FR_OK) {
 				pc->emulink.status = 0x80;
@@ -108,10 +109,10 @@ static int emulink_data_read(PC *pc, uint8_t *buf, int size, int count)
 {
 	if (pc->emulink.cmd == 0x101 && pc->emulink.argi == 3) {
 		uint8_t drv = (uint8_t)pc->emulink.args[0];
-		if (!disk_is_inserted(drv)) goto err;
+		if (!fdd_is_inserted(drv)) goto err;
 		int len = size * count;
 		if (len > pc->emulink.dataleft) goto err;
-		FIL *fil = disk_get_fil(drv);
+		FIL *fil = fdd_get_file(drv);
 		UINT br = 0;
 		FRESULT fr = f_read(fil, buf, (UINT)len, &br);
 		if (fr != FR_OK || (int)br != len) goto err;
@@ -133,10 +134,10 @@ static int emulink_data_write(PC *pc, uint8_t *buf, int size, int count)
 {
 	if (pc->emulink.cmd == 0x102 && pc->emulink.argi == 3) {
 		uint8_t drv = (uint8_t)pc->emulink.args[0];
-		if (!disk_is_inserted(drv)) goto err;
+		if (!fdd_is_inserted(drv)) goto err;
 		int len = size * count;
 		if (len > pc->emulink.dataleft) goto err;
-		FIL *fil = disk_get_fil(drv);
+		FIL *fil = fdd_get_file(drv);
 		UINT bw = 0;
 		FRESULT fr = f_write(fil, buf, (UINT)len, &bw);
 		if (fr != FR_OK || (int)bw != len) goto err;
@@ -956,23 +957,26 @@ static void fdc_mediachange_notify(int drive) {
 /* CD-ROM media change callback: called by disk layer when a CD-ROM drive
  * is inserted (filename != NULL) or ejected (filename == NULL).
  *
- * disk[] index → IDE mapping (mirrors the pc_new() loop):
- *   disk[2] = secondary master  → ide2, drive 0
- *   disk[3] = secondary slave   → ide2, drive 1
- *   disk[4] = DRIVE_CDROM_E     → ide2, drive 1  (runtime-only, diskui)
+ * drivenum = ata[] index (0..3), NOT the diskui selected_drive (0..4):
+ *   ata[0] -> ide,  drive 0  (primary master)
+ *   ata[1] -> ide,  drive 1  (primary slave)
+ *   ata[2] -> ide2, drive 0  (secondary master)  <- DRIVE_CDROM_E via diskui
+ *   ata[3] -> ide2, drive 1  (secondary slave)
  */
 static PC *_pc_for_cdrom = NULL;
 static void cdrom_change_notify(int drivenum, const char *filename) {
     if (!_pc_for_cdrom) return;
-    IDEIFState *ide = _pc_for_cdrom->ide2;
+    IDEIFState *ide = drivenum < 2 ? _pc_for_cdrom->ide : _pc_for_cdrom->ide2;
     int ide_drive;
     switch (drivenum) {
-        case 2: ide_drive = 0; break;          /* secondary master */
-        case 3: ide_drive = 1; break;          /* secondary slave */
-        case 4: ide_drive = 1; break;          /* diskui CDROM E: → secondary slave */
+        case 0: ide_drive = 0; break;
+        case 1: ide_drive = 1; break;
+        case 2: ide_drive = 0; break;
+        case 3: ide_drive = 1; break;
         default: return;
     }
-    ide_change_cd(ide, ide_drive, filename ? filename : "");
+    FIL *f = filename ? ata_get_file(drivenum) : NULL;
+    ide_change_cd(ide, ide_drive, f);
 }
 
 PC *pc_new(SimpleFBDrawFunc *redraw, void (*poll)(void *), void *redraw_data,
@@ -1029,84 +1033,55 @@ PC *pc_new(SimpleFBDrawFunc *redraw, void (*poll)(void *), void *redraw_data,
 	pc->ide  = ide_allocate(14, pc->pic, set_irq);
 	pc->ide2 = ide_allocate(15, pc->pic, set_irq);
 
-	/* Attach hard disks: INT 13h handler (real mode) + IDE emulation (protected mode) */
-	const char **disks = conf->disks;
+	/* Register CD-ROM callback BEFORE insertdisk so the callback fires
+	 * correctly when insertdisk opens a configured CD image below. */
+	_pc_for_cdrom = pc;
+	disk_set_cdrom_change_callback(cdrom_change_notify);
+
+	/* Attach hard disks and configured CD-ROMs.
+	 * ide_attach_cd MUST come before insertdisk for CD slots: insertdisk
+	 * immediately fires disk_cdrom_change_cb which calls ide_change_cd,
+	 * and that requires drives[n] to already exist. */
 	for (int i = 0; i < 4; i++) {
-		if (!disks[i] || disks[i][0] == 0)
+		if (!conf->ata[i] || conf->ata[i][0] == 0)
 			continue;
-		uint8_t drivenum = (i < 2) ? (0x80 + i) : (0x80 + i);
-		insertdisk(drivenum, disks[i]);
-		/* Attach to IDE using the already-open FIL* (avoids FatFs double-open) */
-#ifdef RP2350_BUILD
-		/* drivenum mapping: disk[] index 2 = first HDD, 3 = second HDD */
-		uint8_t didx = (i < 2) ? (2 + i) : (2 + i);
-		FIL *fil = disk_get_fil(didx);
-		if (fil && !conf->iscd[i]) {
-			ide_attach_fil(i < 2 ? pc->ide : pc->ide2,
-			               i < 2 ? i : i - 2,
-			               fil,
-			               disk_get_filesize(didx),
-			               disk_get_data_offset(didx),
-			               disk_get_cyls(didx),
-			               disk_get_heads(didx),
-			               disk_get_sects(didx));
-		} else if (conf->iscd[i]) {
-			/* CD-ROM: safe to open separately (read-only, no write conflict) */
+		if (conf->iscd[i]) {
+			/* Attach ATAPI slot first, then open the image */
 			if (i < 2)
-				ide_attach_cd(pc->ide, i, disks[i]);
+				ide_attach_cd(pc->ide, i);
 			else
-				ide_attach_cd(pc->ide2, i - 2, disks[i]);
-		}
-#else
-		if (i < 2) {
-			if (conf->iscd[i])
-				ide_attach_cd(pc->ide, i, disks[i]);
-			else
-				ide_attach(pc->ide, i, disks[i]);
+				ide_attach_cd(pc->ide2, i - 2);
+			insertdisk(i, false, true, conf->ata[i]);
 		} else {
-			if (conf->iscd[i])
-				ide_attach_cd(pc->ide2, i - 2, disks[i]);
-			else
-				ide_attach(pc->ide2, i - 2, disks[i]);
-		}
-#endif
-	}
-
-#ifdef RP2350_BUILD
-	/* Drive 4 = CD-ROM E: (diskui runtime slot, secondary slave on ide2).
-	 * Pre-attach an empty ATAPI drive so the OS detects the hardware at boot.
-	 * The disc will be inserted later via diskui → cdrom_change_notify. */
-	{
-		/* Drive 4 = CD-ROM E: maps to ide2/drive1 (secondary slave).
-		 * Only attach if that slot wasn't already taken by conf->disks[3]. */
-		bool slot_free = !(conf->disks[3] && conf->disks[3][0]);
-		if (slot_free) {
-			const char *cd4 = disk_get_filename(4);
-			if (cd4 && cd4[0]) {
-				char cd4path[256];
-				snprintf(cd4path, sizeof(cd4path), "386/%s", cd4);
-				if (ide_attach_cd(pc->ide2, 1, cd4path) != 0)
-					ide_attach_cd(pc->ide2, 1, "");
-			} else {
-				ide_attach_cd(pc->ide2, 1, "");
-			}
+			/* HDD: insertdisk opens the file, then attach */
+			insertdisk(i, false, false, conf->ata[i]);
+			FIL *fil = ata_get_file(i);
+			if (fil)
+				ide_attach_ata(i < 2 ? pc->ide : pc->ide2,
+				               i < 2 ? i : i - 2,
+				               fil,
+				               ata_get_cyls(i),
+				               ata_get_heads(i),
+				               ata_get_sects(i));
 		}
 	}
-#endif
 
-	/* Fill CMOS with hard drive geometry from IDE (replaces manual block) */
-	ide_fill_cmos(pc->ide, pc->cmos, cmos_set);
-	mem[0x475] = hdcount;
+	/* CD-ROM E: always present on ide2/drive0 (secondary master).
+	 * Only attach if cdc= didn't already claim that slot (ata[2]). */
+	if (!ide_has_drive(pc->ide2, 0))
+		ide_attach_cd(pc->ide2, 0);
+
+
 
 	/* we have emulation for 2 FDDs (CMOS 0x10):
 		биты 7-4 = тип A:
 		биты 3-0 = тип B:
 		значение 4 = 1.44MB 3.5"
 	*/
-	cmos_set(pc->cmos, 0x10, 0x44); // A: = 1.44MB, B: = 1.44MB
-	cmos_set(pc->cmos, 0x14, 0x41); // бит 0 = флоппи есть, биты 7-6 = 01 = два дисковода
+//	cmos_set(pc->cmos, 0x10, 0x44); // A: = 1.44MB, B: = 1.44MB
+//	cmos_set(pc->cmos, 0x14, 0x41); // бит 0 = флоппи есть, биты 7-6 = 01 = два дисковода
 	/* Checksum ПОСЛЕ всех записей в диапазон 0x10-0x2D */
-	cmos_update_checksum(pc->cmos);
+//	cmos_update_checksum(pc->cmos);
 
 	int piix3_devfn;
 	pc->i440fx = i440fx_init(&pc->pcibus, &piix3_devfn);
@@ -1148,7 +1123,7 @@ PC *pc_new(SimpleFBDrawFunc *redraw, void (*poll)(void *), void *redraw_data,
 		if (!fdd[i] || fdd[i][0] == 0)
 			continue;
 		/* Floppy drives use drivenum 0 and 1 */
-		insertdisk(i, fdd[i]);
+		insertdisk(i, true, false, fdd[i]);
 	}
 
 	cb->iomem = pc;
@@ -1184,8 +1159,6 @@ PC *pc_new(SimpleFBDrawFunc *redraw, void (*poll)(void *), void *redraw_data,
 	pc->fdc = fdc_new(pc->pic, pc->isa_dma);
 	_pc_for_fdc = pc;
 	disk_set_fdc_mediachange_callback(fdc_mediachange_notify);
-	_pc_for_cdrom = pc;
-	disk_set_cdrom_change_callback(cdrom_change_notify);
 	pc->sb16 = sb16_new(0x220, 5,
 			    pc->isa_dma, pc->isa_hdma,
 			    pc->pic, set_irq);
@@ -1295,34 +1268,29 @@ int parse_conf_ini(void* user, const char* section,
 		} else if (NAME("cpu")) {
 			conf->cpu_gen = atoi(value);
 		} else if (NAME("hda")) {
-			conf->disks[0] = strdup(value);
+			conf->ata[0] = strdup(value);
 			conf->iscd[0] = 0;
 		} else if (NAME("hdb")) {
-			conf->disks[1] = strdup(value);
+			conf->ata[1] = strdup(value);
 			conf->iscd[1] = 0;
 		} else if (NAME("hdc")) {
-			conf->disks[2] = strdup(value);
+			conf->ata[2] = strdup(value);
 			conf->iscd[2] = 0;
 		} else if (NAME("hdd")) {
-			conf->disks[3] = strdup(value);
+			conf->ata[3] = strdup(value);
 			conf->iscd[3] = 0;
 		} else if (NAME("cda")) {
-			conf->disks[0] = strdup(value);
+			conf->ata[0] = strdup(value);
 			conf->iscd[0] = 1;
 		} else if (NAME("cdb")) {
-			conf->disks[1] = strdup(value);
+			conf->ata[1] = strdup(value);
 			conf->iscd[1] = 1;
 		} else if (NAME("cdc")) {
-			conf->disks[2] = strdup(value);
+			conf->ata[2] = strdup(value);
 			conf->iscd[2] = 1;
 		} else if (NAME("cdd")) {
-			conf->disks[3] = strdup(value);
+			conf->ata[3] = strdup(value);
 			conf->iscd[3] = 1;
-		} else if (NAME("cde")) {
-			/* CD-ROM E: = diskui runtime drive 4 (secondary slave, ide2/drive1) */
-			disk_set_filename(4, value);
-			disk_set_cdrom(4, 1);
-			disk_set_inserted(4, 1);  /* mark as inserted so GUI shows filename */
 		} else if (NAME("fda")) {
 			conf->fdd[0] = strdup(value);
 		} else if (NAME("fdb")) {
