@@ -30,6 +30,7 @@
 
 #include "fdd.h"
 #include "disk.h"       /* disk[], chs2ofs helpers, FatFS FIL         */
+#include "ff.h"
 
 /* ------------------------------------------------------------------ */
 /*  Compile-time tunables                                               */
@@ -217,15 +218,15 @@ static inline int fdc_drivenum(int drive)
 
 static inline int fdc_drive_ready(int drivenum)
 {
-    return disk_is_inserted((uint8_t)drivenum);
+    return fdd_is_inserted((uint8_t)drivenum);
 }
 
 /* Compute byte offset in image file from CHS */
 static uint32_t fdc_chs_to_offset(int drivenum, int cyl, int head, int sect)
 {
     /* geometry is stored in disk[] – use public accessors */
-    uint16_t heads = disk_get_heads((uint8_t)drivenum);
-    uint16_t sects = disk_get_sects((uint8_t)drivenum);
+    uint16_t heads = fdd_get_heads((uint8_t)drivenum);
+    uint16_t sects = fdd_get_sects((uint8_t)drivenum);
     if (heads == 0 || sects == 0) return (uint32_t)-1;
     return (uint32_t)(((uint32_t)cyl * heads + (uint32_t)head) * sects
                       + ((uint32_t)sect - 1)) * FDC_SECTOR_SIZE;
@@ -234,9 +235,9 @@ static uint32_t fdc_chs_to_offset(int drivenum, int cyl, int head, int sect)
 /* Validate CHS against current geometry */
 static int fdc_chs_valid(int drivenum, int cyl, int head, int sect)
 {
-    uint16_t cyls  = disk_get_cyls ((uint8_t)drivenum);
-    uint16_t heads = disk_get_heads((uint8_t)drivenum);
-    uint16_t sects = disk_get_sects((uint8_t)drivenum);
+    uint16_t cyls  = fdd_get_cyls ((uint8_t)drivenum);
+    uint16_t heads = fdd_get_heads((uint8_t)drivenum);
+    uint16_t sects = fdd_get_sects((uint8_t)drivenum);
     return (sect >= 1 && sect <= sects &&
             (uint16_t)cyl  < cyls &&
             (uint16_t)head < heads);
@@ -387,7 +388,7 @@ static int fdc_dma_handler(void *opaque, int nchan, int dma_pos, int dma_len)
 
             if (!s->dma_write) {
                 /* READ: load sector from disk image into buffer */
-                FIL *fil = disk_get_fil((uint8_t)drivenum);
+                FIL *fil = fdd_get_file((uint8_t)drivenum);
                 if (!fil) goto dma_error;
                 UINT br;
                 FRESULT fr = f_lseek(fil, off);
@@ -427,7 +428,7 @@ static int fdc_dma_handler(void *opaque, int nchan, int dma_pos, int dma_len)
         if (s->sector_buf_pos >= FDC_SECTOR_SIZE) {
             if (s->dma_write) {
                 /* Flush sector to disk image */
-                FIL *fil = disk_get_fil((uint8_t)drivenum);
+                FIL *fil = fdd_get_file((uint8_t)drivenum);
                 if (!fil) goto dma_error;
                 UINT bw;
                 FRESULT fr = f_lseek(fil, s->dma_file_off);
@@ -438,7 +439,7 @@ static int fdc_dma_handler(void *opaque, int nchan, int dma_pos, int dma_len)
 
             /* Advance CHS to next sector */
             s->cur_sector++;
-            uint16_t spt = disk_get_sects((uint8_t)drivenum);
+            uint16_t spt = fdd_get_sects((uint8_t)drivenum);
             if (s->cur_sector > spt || s->cur_sector > s->eot) {
                 s->cur_sector = 1;
                 s->cur_head ^= 1;
@@ -711,7 +712,7 @@ static void fdc_execute_command(FDCState *s)
         /* Write fill bytes to all sectors on the current track.
            We format the track that was last seeked to.                */
         uint8_t cyl = s->drive[dn].track;
-        FIL *fil = disk_get_fil((uint8_t)dn);
+        FIL *fil = fdd_get_file((uint8_t)dn);
         if (fil) {
             memset(s->sector_buf, fill, FDC_SECTOR_SIZE);
             for (int sec = 1; sec <= (int)sc; sec++) {

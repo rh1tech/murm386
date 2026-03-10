@@ -718,17 +718,16 @@ static bool redirector_handler_impl() {
     return true;
 }
 
-static void int2f_callback(CPUI386 *cpu, void *opaque) {
+static bool int2f_callback(CPUI386 *cpu, void *opaque) {
     _nr_cpu = cpu;
     /* Only handle our redirector multiplex (AH=11h) */
     if (cpu_get_ah(cpu) != 0x11) {
-        cpu_set_cf(cpu, 1); /* not handled, let BIOS chain */
-        return;
+        return false; /* not handled, let BIOS chain */
     }
-    if (!redirector_handler_impl()) {
-        cpu_set_cf(cpu, 1); /* unimplemented - let BIOS chain */
-    }
-    /* if handled, CF was already set by the handler itself */
+    bool ok = redirector_handler_impl();
+    if (!ok)
+        SET_CPU_FL_CF(1);
+    return true;
 }
 
 void netredirect_init(CPUI386 *cpu) {

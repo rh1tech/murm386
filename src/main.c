@@ -435,7 +435,7 @@ static void load_default_config(void) {
 
     // No disks by default (set via INI file)
     for (int i = 0; i < 4; i++) {
-        config.disks[i] = NULL;
+        config.ata[i] = NULL;
         config.iscd[i] = 0;
     }
     config.fdd[0] = NULL;
