@@ -45,7 +45,7 @@ int ide_attach_cd(IDEIFState *s, int drive);
 int ide_has_drive(IDEIFState *s, int drive);
 
 /* Hot-swap CD image: pass open FIL* on insert, NULL to eject */
-void ide_change_cd(IDEIFState *sif, int drive, FIL *f);
+void ide_change_cd(IDEIFState *sif, int drive, FIL *f, int was_present);
 
 void     ide_data_writew(void *opaque, uint32_t val);
 uint32_t ide_data_readw(void *opaque);

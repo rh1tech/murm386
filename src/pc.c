@@ -964,7 +964,7 @@ static void fdc_mediachange_notify(int drive) {
  *   ata[3] -> ide2, drive 1  (secondary slave)
  */
 static PC *_pc_for_cdrom = NULL;
-static void cdrom_change_notify(int drivenum, const char *filename) {
+static void cdrom_change_notify(int drivenum, const char *filename, int was_present) {
     if (!_pc_for_cdrom) return;
     IDEIFState *ide = drivenum < 2 ? _pc_for_cdrom->ide : _pc_for_cdrom->ide2;
     int ide_drive;
@@ -976,7 +976,7 @@ static void cdrom_change_notify(int drivenum, const char *filename) {
         default: return;
     }
     FIL *f = filename ? ata_get_file(drivenum) : NULL;
-    ide_change_cd(ide, ide_drive, f);
+    ide_change_cd(ide, ide_drive, f, was_present);
 }
 
 PC *pc_new(SimpleFBDrawFunc *redraw, void (*poll)(void *), void *redraw_data,

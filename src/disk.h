@@ -23,7 +23,8 @@ void disk_set_cmos_callback(void (*cb)(uint8_t type_a, uint8_t type_b));
 void disk_set_fdc_mediachange_callback(void (*cb)(int drive));
 /* Callback: called when a CD-ROM (drive 4) is inserted or ejected.
    Used by the IDE emulator to signal UNIT_ATTENTION. */
-void disk_set_cdrom_change_callback(void (*cb)(int drive, const char *filename));
+void disk_set_cdrom_change_callback(void (*cb)(int drive, const char *filename, int was_present));
+
 struct VGAState;
 void disk_set_vga(struct VGAState *vga);
 uint8_t ata_is_cdrom(uint8_t drivenum);

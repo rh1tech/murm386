@@ -40,6 +40,7 @@ struct struct_ata {
     uint16_t heads;
     uint8_t iscdrom;
     uint8_t drive_type;
+    uint8_t was_present;  /* snapshot taken before eject, used by insert callback */
 } ata[4] = { 0 };
 
 
@@ -77,8 +78,8 @@ void disk_set_cmos_callback(void (*cb)(uint8_t, uint8_t)) { disk_cmos_update_cb 
 static void (*disk_fdc_mediachange_cb)(int drive) = NULL;
 void disk_set_fdc_mediachange_callback(void (*cb)(int drive)) { disk_fdc_mediachange_cb = cb; }
 
-static void (*disk_cdrom_change_cb)(int drive, const char *filename) = NULL;
-void disk_set_cdrom_change_callback(void (*cb)(int drive, const char *filename)) { disk_cdrom_change_cb = cb; }
+static void (*disk_cdrom_change_cb)(int drive, const char *filename, int was_present) = NULL;
+void disk_set_cdrom_change_callback(void (*cb)(int drive, const char *filename, int was_present)) { disk_cdrom_change_cb = cb; }
 
 /* Установить FDPT (Fixed Disk Parameter Table) и INT 41h/46h векторы.
  * Вызывается при каждом INT 13h для HDD — перезаписывает то что мог
@@ -141,12 +142,13 @@ void disk_set_cpu(CPUI386 *cpu) {
 
 void ejectdisk(uint8_t drivenum, bool atapi) {
     if (drivenum < 4 && atapi && ata[drivenum].name) {
+        ata[drivenum].was_present = 1;  /* remember disc was here before eject */
         f_close(&ata[drivenum].fil);
         free(ata[drivenum].name);
         ata[drivenum].name = 0;
         /* Notify IDE about CD tray empty */
         if (ata[drivenum].iscdrom && disk_cdrom_change_cb)
-            disk_cdrom_change_cb(drivenum, NULL);
+            disk_cdrom_change_cb(drivenum, NULL, 1);
         else if (!ata[drivenum].iscdrom)
             hdcount--;
     }
@@ -211,7 +213,8 @@ uint8_t insertdisk(uint8_t drivenum, bool is_fdd, bool is_cd, const char *pathna
         ata[drivenum].heads      = 0;
         ata[drivenum].sects      = 0;
         if (disk_cdrom_change_cb)
-            disk_cdrom_change_cb(drivenum, path);
+            disk_cdrom_change_cb(drivenum, path, ata[drivenum].was_present);
+        ata[drivenum].was_present = 0;  /* consumed */
         return 1;
     }
     // Validate size constraints (non-CD-ROM only)
