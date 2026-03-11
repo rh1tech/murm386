@@ -105,7 +105,8 @@ static volatile int update_requested = 0;  // Set by update call
 uint8_t gfx_buffer[GFX_BUFFER_SIZE] __attribute__((aligned(4)));
 
 // Fast text palette for 2-bit pixel pairs
-static uint16_t txt_palette_fast[256 * 4];
+extern uint32_t conv_color2[1024]; // 4096 in hdmi only
+static uint16_t* txt_palette_fast = (uint16_t*)&conv_color2[0]; ///[256 * 4]; 2048, reusing
 
 // Graphics palette (256 entries) - 16-bit dithered format
 // Each entry: low byte = c_hi (conv0), high byte = c_lo (conv1)
@@ -1322,14 +1323,14 @@ void __time_critical_func(vga_hw_set_gfx_mode)(int submode, int width, int heigh
     }
 }
 
-extern uint32_t conv_color[1224], conv_color2[1224];
+extern uint32_t conv_color[1224], conv_color2[1024];
 
 void __not_in_flash_func(vga_hw_process_deferred)(void) {
     if (!frame_update_request)
         return;
     frame_update_request = 0;
     uint32_t t0 = timer_hw->timerawl;
-    if (required_to_repair_text_pal) {
+    if (!SELECT_VGA && required_to_repair_text_pal) {
         required_to_repair_text_pal = false;
         // Only restore palette entries (0..1023), not the DMA line buffers (1024..1223)
         memcpy(conv_color, conv_color2, 1024 * sizeof(uint32_t));
