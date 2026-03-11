@@ -20,7 +20,7 @@
 static int cfg_mem_mb = 8;
 static int cfg_cpu_gen = 4;
 static int cfg_fpu = 0;
-static int cfg_fill_cmos = 1;
+static int cfg_redirector = 1;
 static bool cfg_changed = false;
 
 // Hardware settings (use build-time defaults)
@@ -73,10 +73,10 @@ void config_set_fpu(int enabled) {
     }
 }
 
-int config_get_fill_cmos(void) { return cfg_fill_cmos; }
-void config_set_fill_cmos(int enabled) {
-    if (cfg_fill_cmos != enabled) {
-        cfg_fill_cmos = enabled;
+int config_get_redirector(void) { return cfg_redirector; }
+void config_set_redirector(int enabled) {
+    if (cfg_redirector != enabled) {
+        cfg_redirector = enabled;
         cfg_changed = true;
     }
 }
@@ -233,7 +233,7 @@ bool config_save_all(void) {
     write_line(&fp, "vga_bios=vgabios.bin\n");
 
     // Fill CMOS
-    snprintf(line, sizeof(line), "fill_cmos=%d\n", cfg_fill_cmos);
+    snprintf(line, sizeof(line), "redirector=%d\n", cfg_redirector);
     write_line(&fp, line);
 
     // Disks (must be in [pc] section)

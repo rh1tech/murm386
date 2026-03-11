@@ -12,7 +12,7 @@
 #include "i386.h"
 #include "ff.h"
 
-#define DEBUG_2F
+//#define DEBUG_2F
 
 #if defined(DEBUG_2F)
 #include <stdarg.h>
@@ -836,7 +836,7 @@ static bool int2f_callback(CPUI386 *cpu, void *opaque) {
     return res;
 }
 
-void netredirect_init(CPUI386 *cpu) {
+void netredirect_init(CPUI386 *cpu, int enable) {
     _nr_mem = cpu_get_phys_mem(cpu);
-    cpu_set_int2f_handler(cpu, int2f_callback, NULL);
+    cpu_set_int2f_handler(cpu, enable ? int2f_callback : NULL, NULL);
 }

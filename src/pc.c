@@ -11,7 +11,7 @@
 #include <hardware/watchdog.h>
 
 #include "mpu401.c.inl"
-void netredirect_init(CPUI386 *cpu);
+void netredirect_init(CPUI386 *cpu, int enable);
 
 #ifdef USEKVM
 #define cpu_raise_irq cpukvm_raise_irq
@@ -1027,7 +1027,8 @@ PC *pc_new(SimpleFBDrawFunc *redraw, void (*poll)(void *), void *redraw_data,
 	/* Set up INT 13h disk handler (real mode - DOS) */
 	disk_set_cpu(pc->cpu);
 	disk_set_cmos_callback(cmos_floppy_update);
-	netredirect_init(pc->cpu);
+
+	netredirect_init(pc->cpu, conf->redirector);
 
 	/* Set up IDE emulation (protected mode - Win95) */
 	pc->ide  = ide_allocate(14, pc->pic, set_irq);
@@ -1295,8 +1296,8 @@ int parse_conf_ini(void* user, const char* section,
 			conf->fdd[0] = strdup(value);
 		} else if (NAME("fdb")) {
 			conf->fdd[1] = strdup(value);
-		} else if (NAME("fill_cmos")) {
-			conf->fill_cmos = atoi(value);
+		} else if (NAME("redirector")) {
+			conf->redirector = atoi(value);
 		} else if (NAME("linuxstart")) {
 			conf->linuxstart = strdup(value);
 		} else if (NAME("kernel")) {

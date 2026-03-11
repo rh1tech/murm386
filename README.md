@@ -259,8 +259,8 @@ Use `setup /im` to bypass memory check.
 ### "Protection error" during Windows 95 startup
 Use [patcher9x](https://github.com/JHRobotics/patcher9x).
 
-### Freeze during Windows NT4/2000/XP startup
-Set `fill_cmos = 0` in config.ini.
+### Enable mapdrivde.com support (redirector) to map SD-card to network-attached-drive H
+Set `redirector = 1` in config.ini.
 
 ### No keyboard input
 - For PS/2: Check keyboard connection and GPIO pins

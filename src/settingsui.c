@@ -30,7 +30,7 @@ typedef enum {
     SETTING_MEM,
     SETTING_CPU,
     SETTING_FPU,
-    SETTING_FILL_CMOS,
+    SETTING_REDIRECTOR,
     SETTING_PCSPEAKER,
     SETTING_ADLIB,
     SETTING_SOUNDBLASTER,
@@ -92,7 +92,7 @@ static bool restart_requested = false;
 static int plasma_frame = 0;  // Animation frame counter
 
 // Original values (to detect changes)
-static int orig_mem, orig_cpu, orig_fpu, orig_fill_cmos;
+static int orig_mem, orig_cpu, orig_fpu, orig_redirector;
 static int orig_pcspeaker, orig_adlib, orig_soundblaster, orig_tandy, orig_covox, orig_dss, orig_mouse, orig_mpu401;
 static int orig_cpu_freq, orig_psram_freq, orig_flash_freq, orig_volume, orig_voltage;
 
@@ -122,7 +122,7 @@ void settingsui_open(void) {
     orig_mem = config_get_mem_size_mb();
     orig_cpu = config_get_cpu_gen();
     orig_fpu = config_get_fpu();
-    orig_fill_cmos = config_get_fill_cmos();
+    orig_redirector = config_get_redirector();
     orig_pcspeaker = config_get_pcspeaker();
     orig_adlib = config_get_adlib();
     orig_soundblaster = config_get_soundblaster();
@@ -151,7 +151,7 @@ void settingsui_close(void) {
         config_set_mem_size_mb(orig_mem);
         config_set_cpu_gen(orig_cpu);
         config_set_fpu(orig_fpu);
-        config_set_fill_cmos(orig_fill_cmos);
+        config_set_redirector(orig_redirector);
         config_set_cpu_freq(orig_cpu_freq);
         config_set_psram_freq(orig_psram_freq);
         config_set_flash_freq(orig_flash_freq);
@@ -216,8 +216,8 @@ static void cycle_option(int direction) {
             config_set_fpu(config_get_fpu() ? 0 : 1);
             break;
 
-        case SETTING_FILL_CMOS:
-            config_set_fill_cmos(config_get_fill_cmos() ? 0 : 1);
+        case SETTING_REDIRECTOR:
+            config_set_redirector(config_get_redirector() ? 0 : 1);
             break;
 
         case SETTING_PCSPEAKER:
@@ -301,7 +301,7 @@ static void draw_settings_menu(void) {
         "RAM Size:",
         "CPU Type:",
         "FPU (387):",
-        "Fill CMOS:",
+        "SD cart as H drive:",
         "PC Speaker:",
         "AdLib:",
         "SoundBlaster:",
@@ -341,8 +341,8 @@ static void draw_settings_menu(void) {
             case SETTING_FPU:
                 snprintf(value, sizeof(value), "< %s >", config_get_fpu() ? "Enabled" : "Disabled");
                 break;
-            case SETTING_FILL_CMOS:
-                snprintf(value, sizeof(value), "< %s >", config_get_fill_cmos() ? "Enabled" : "Disabled");
+            case SETTING_REDIRECTOR:
+                snprintf(value, sizeof(value), "< %s >", config_get_redirector() ? "Enabled" : "Disabled");
                 break;
             case SETTING_PCSPEAKER:
                 snprintf(value, sizeof(value), "< %s >", config_get_pcspeaker() ? "Enabled" : "Disabled");
