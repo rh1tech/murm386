@@ -85,7 +85,7 @@ static uint32_t hdmi_extra_line_buf[2][100];
 //ДМА палитра для конвертации
 //в хвосте этой памяти выделяется dma_data
 alignas(4096) uint32_t conv_color[1224];
-uint32_t conv_color2[1224]; // backup to fast restore pallete
+uint32_t conv_color2[1024]; // backup to fast restore pallete
 bool required_to_repair_text_pal = false;
 
 //индекс, проверяющий зависание
@@ -883,7 +883,7 @@ static inline bool hdmi_init() {
     conv_color64[2 * HDMI_CTRL_3 + 0] = get_ser_diff_data(b0, b0, b0);
     conv_color64[2 * HDMI_CTRL_3 + 1] = get_ser_diff_data(b0, b0, b0);
 
-    memcpy(conv_color2, conv_color, sizeof(conv_color));
+    memcpy(conv_color2, conv_color, 1024 * 4);
 
     //настройка PIO SM для конвертации
     pio_sm_config c_c = pio_get_default_sm_config();
