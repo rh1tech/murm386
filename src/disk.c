@@ -40,7 +40,6 @@ struct struct_ata {
     uint16_t heads;
     uint8_t iscdrom;
     uint8_t drive_type;
-    uint8_t was_present;  /* snapshot taken before eject, used by insert callback */
 } ata[4] = { 0 };
 
 
@@ -78,8 +77,8 @@ void disk_set_cmos_callback(void (*cb)(uint8_t, uint8_t)) { disk_cmos_update_cb 
 static void (*disk_fdc_mediachange_cb)(int drive) = NULL;
 void disk_set_fdc_mediachange_callback(void (*cb)(int drive)) { disk_fdc_mediachange_cb = cb; }
 
-static void (*disk_cdrom_change_cb)(int drive, const char *filename, int was_present) = NULL;
-void disk_set_cdrom_change_callback(void (*cb)(int drive, const char *filename, int was_present)) { disk_cdrom_change_cb = cb; }
+static void (*disk_cdrom_change_cb)(int drive, const char *filename) = NULL;
+void disk_set_cdrom_change_callback(void (*cb)(int drive, const char *filename)) { disk_cdrom_change_cb = cb; }
 
 /* Установить FDPT (Fixed Disk Parameter Table) и INT 41h/46h векторы.
  * Вызывается при каждом INT 13h для HDD — перезаписывает то что мог
@@ -142,15 +141,24 @@ void disk_set_cpu(CPUI386 *cpu) {
 
 void ejectdisk(uint8_t drivenum, bool atapi) {
     if (drivenum < 4 && atapi && ata[drivenum].name) {
-        ata[drivenum].was_present = 1;  /* remember disc was here before eject */
         f_close(&ata[drivenum].fil);
         free(ata[drivenum].name);
         ata[drivenum].name = 0;
-        /* Notify IDE about CD tray empty */
-        if (ata[drivenum].iscdrom && disk_cdrom_change_cb)
-            disk_cdrom_change_cb(drivenum, NULL, 1);
-        else if (!ata[drivenum].iscdrom)
+        if (ata[drivenum].iscdrom) {
+            /* Notify IDE about CD tray empty */
+            if (disk_cdrom_change_cb)
+                disk_cdrom_change_cb(drivenum, NULL);
+        } else {
+            /* HDD removed */
             hdcount--;
+        }
+    }
+    else if (!atapi && drivenum < 4 && ata[drivenum].name && !ata[drivenum].iscdrom) {
+        /* HDD eject via atapi=false path (e.g. from GUI eject_disk) */
+        f_close(&ata[drivenum].fil);
+        free(ata[drivenum].name);
+        ata[drivenum].name = 0;
+        hdcount--;
     }
     else if (drivenum < 2 && fdd[drivenum].name) {
         f_close(&fdd[drivenum].fil);
@@ -177,9 +185,13 @@ uint8_t insertdisk(uint8_t drivenum, bool is_fdd, bool is_cd, const char *pathna
     BYTE fmode = is_cd ? FA_READ : (FA_READ | FA_WRITE);
     FIL* pf = is_fdd ? &fdd[drivenum].fil : &ata[drivenum].fil;
     if (pf->obj.fs) {
-        /* Always eject current image before inserting a new one,
-         * regardless of drive type (floppy, HDD, or CD-ROM). */
-        ejectdisk(drivenum, is_cd || !is_fdd);
+        /* Eject whatever is currently in the drive before inserting new image */
+        if (is_fdd)
+            ejectdisk(drivenum, false);
+        else if (is_cd)
+            ejectdisk(drivenum, true);
+        else
+            ejectdisk(drivenum, false);  /* HDD: atapi=false path */
     }
     FRESULT fres = f_open(pf, path, fmode);
     if (FR_OK != fres) {
@@ -213,8 +225,7 @@ uint8_t insertdisk(uint8_t drivenum, bool is_fdd, bool is_cd, const char *pathna
         ata[drivenum].heads      = 0;
         ata[drivenum].sects      = 0;
         if (disk_cdrom_change_cb)
-            disk_cdrom_change_cb(drivenum, path, ata[drivenum].was_present);
-        ata[drivenum].was_present = 0;  /* consumed */
+            disk_cdrom_change_cb(drivenum, path);
         return 1;
     }
     // Validate size constraints (non-CD-ROM only)
