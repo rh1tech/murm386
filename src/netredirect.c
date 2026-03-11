@@ -12,13 +12,32 @@
 #include "i386.h"
 #include "ff.h"
 
-// #define DEBUG_2F
+#define DEBUG_2F
 
 #if defined(DEBUG_2F)
-#define debug_log(...) printf(__VA_ARGS__)
+#include <stdarg.h>
+static FIL _2f_tf;
+static int _2f_tf_open = 0;
+void debug_log(const char *fmt, ...) {
+    if (!_2f_tf_open) {
+        _2f_tf_open = (f_open(&_2f_tf, "386/2f.txt", FA_WRITE | FA_OPEN_APPEND | FA_OPEN_ALWAYS) == FR_OK);
+    }
+    if (!_2f_tf_open) return;
+    char buf[256];
+    va_list ap;
+    va_start(ap, fmt);
+    int len = vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    if (len < 0) return;
+    if (len > (int)sizeof(buf)) len = sizeof(buf);
+    UINT bw;
+    f_write(&_2f_tf, buf, len, &bw);
+    f_sync(&_2f_tf);
+}
 #else
 #define debug_log(...) ((void)0)
 #endif
+
 
 /* ---- Register access adapter macros ---- */
 #define _cpu  (_nr_cpu)
@@ -189,8 +208,28 @@ static void to_dos_name(const char *input, char *output) {
     }
 }
 
+static void sfn_to_dos_name(const char *sfn, char out[11]) {
+    memset(out, ' ', 11);
+
+    int i = 0, j = 0;
+
+    // name
+    while (sfn[i] && sfn[i] != '.' && j < 8) {
+        out[j++] = toupper((unsigned char)sfn[i++]);
+    }
+
+    // extension
+    if (sfn[i] == '.') {
+        i++;
+        j = 8;
+        while (sfn[i] && j < 11) {
+            out[j++] = toupper((unsigned char)sfn[i++]);
+        }
+    }
+}
+
 typedef struct {
-    unsigned char fname[11];
+    unsigned char altname[11];
     unsigned char fattr; /* (1=RO 2=HID 4=SYS 8=VOL 16=DIR 32=ARCH 64=DEVICE) */
     unsigned char f1[10];
     unsigned short time_lstupd; /* 16 bits: hhhhhmmm mmmsssss */
@@ -234,28 +273,90 @@ typedef struct __attribute__((packed)) {
 
 #define FIRST_FILENAME_OFFSET 0x9e
 
+/* Drive letter our redirector owns — matches mapdrive.exe hardcoding */
+#define REDIR_DRIVE_LETTER 'H'
+
+/* Return true if the guest path in SDA's first-filename buffer belongs to
+ * our redirector drive (H:).  For commands that don't carry a path (file
+ * handle ops, find-next, flush…) we rely on the fact that DOS only routes
+ * them to the redirector that opened the handle / started the search, so
+ * we let those through unconditionally. */
+static bool path_is_ours(uint32_t sda_addr) {
+    if (!sda_addr) return false;
+    char first_char[3] = {0};
+    /* Read just the first two bytes of the filename buffer */
+    first_char[0] = (char)read86(sda_addr + FIRST_FILENAME_OFFSET);
+    first_char[1] = (char)read86(sda_addr + FIRST_FILENAME_OFFSET + 1);
+    /* Absolute path with our drive letter, e.g. "H:\..." */
+    if (toupper((unsigned char)first_char[0]) == REDIR_DRIVE_LETTER
+        && first_char[1] == ':')
+        return true;
+    return false;
+}
+
+static bool sft_is_ours(void) {
+    uint32_t sft_addr = ((uint32_t)CPU_ES << 4) + CPU_DI;
+    uint16_t devinfo = readw86(sft_addr + offsetof(sftstruct, device_info));
+    /* our redirector writes 0x8040 | 'H' into SFT.device_info */
+    return devinfo == (uint16_t)(0x8040 | REDIR_DRIVE_LETTER);
+}
+
 static bool redirector_handler_impl() {
     char path[256];
     char guest_path[256];
     static char new_path[256];
-    /*
- * Pointers to SDA fields. Layout:
- *                             DOS4+   DOS 3, DR-DOS
- * DTA ptr                      0Ch     0Ch
- * First filename buffer        9Eh     92h
- * Search data block (SDB)     19Eh    192h
- * Dir entry for found file    1B3h    1A7h
- * Search attributes           24Dh    23Ah
- * File access/sharing mode    24Eh    23Bh
- * Ptr to current CDS          282h    26Ch
- * Extended open mode          2E1h    Not supported
- */
 
     static uint32_t sda_addr = 0;
-
     static DIR find_handle;
     static FILINFO find_fileinfo;
+    /* true only while a Find First/Next sequence we started is in progress */
+    static bool find_is_ours = false;
 
+    /* Gate path-bearing commands on drive letter H:.
+     * Gate Find Next on whether we started the search.
+     * Gate Flush on whether we have any open files at all.
+     * Everything else (handle ops, install check) passes through — DOS
+     * already routes handle ops only to the redirector that owns the handle. */
+    switch (CPU_AX) {
+        case 0x1101: /* Remove Remote Directory   */
+        case 0x1103: /* Create Remote Directory   */
+        case 0x1105: /* Change Directory          */
+        case 0x110F: /* Get File Attributes       */
+        case 0x1111: /* Rename Remote File        */
+        case 0x1113: /* Delete Remote File        */
+        case 0x1116: /* Open Existing File        */
+        case 0x1117: /* Create/Truncate File      */
+        case 0x111B: /* Find First File           */
+            if (!path_is_ours(sda_addr)) {
+                find_is_ours = false; /* foreign Find First resets our state */
+                return false;
+            }
+            if (CPU_AX == 0x111B) find_is_ours = true;
+            break;
+        case 0x111C: /* Find Next — only if we started this search */
+            if (!find_is_ours)
+                return false;
+            break;
+        case 0x1106: /* Close Remote File         */
+        case 0x1107: /* Commit Remote File        */
+        case 0x1108: /* Read Remote File          */
+        case 0x1109: /* Write Remote File         */
+        case 0x1121: /* Seek from File End        */
+            if (!sft_is_ours())
+                return false;
+            break;
+        case 0x1120: /* Flush — skip if we have nothing open */
+        {
+            bool have_open = false;
+            for (int i = 0; i < MAX_FILES; i++)
+                if (open_files[i]) { have_open = true; break; }
+            if (!have_open)
+                return false;
+            break;
+        }
+        default:
+            break;
+    }
 
     SET_CPU_FL_CF(0); /* default: success, handlers override for errors */
     switch (CPU_AX) {
@@ -618,7 +719,10 @@ static bool redirector_handler_impl() {
                 read_block_from_ram(dta_addr, (uint8_t*)&sdb, sizeof(sdb));
 
                 sdb.drive_letter = 'H' | 128; // bit 7 should be set
-                to_dos_name(find_fileinfo.fname, sdb.foundfile.fname);
+                if (find_fileinfo.altname[0])
+                    sfn_to_dos_name(find_fileinfo.altname, sdb.foundfile.altname);
+                else 
+                    to_dos_name(find_fileinfo.fname, sdb.foundfile.altname);
                 sdb.foundfile.fsize = find_fileinfo.fsize;
                 sdb.foundfile.fattr = find_fileinfo.fattrib;
 
@@ -627,7 +731,7 @@ static bool redirector_handler_impl() {
                 SET_CPU_FL_CF(0);
             } else {
                 debug_log("no files found for '%s' in '%s': %i\n", new_path, path, find_result);
-
+                find_is_ours = false;
                 if (FR_OK == find_result) {
                     SET_CPU_AX(18); // No more files
                     SET_CPU_FL_CF(1);
@@ -645,8 +749,10 @@ static bool redirector_handler_impl() {
                 uint32_t dta_addr = (readw86(sda_addr + 14) << 4) + readw86(sda_addr + 12);
                 sdbstruct sdb;
                 read_block_from_ram(dta_addr, (uint8_t*)&sdb, sizeof(sdb));
-
-                to_dos_name(find_fileinfo.fname, sdb.foundfile.fname);
+                if (find_fileinfo.altname[0])
+                    sfn_to_dos_name(find_fileinfo.altname, sdb.foundfile.altname);
+                else 
+                    to_dos_name(find_fileinfo.fname, sdb.foundfile.altname);
                 sdb.foundfile.fattr = find_fileinfo.fattrib;
                 sdb.foundfile.fsize = find_fileinfo.fsize;
                 sdb.foundfile.start_clstr = 0;
@@ -656,7 +762,7 @@ static bool redirector_handler_impl() {
                 SET_CPU_FL_CF(0);
             } else {
                 debug_log("no more files found for '%s' in '%s': %i\n", path, find_result);
-
+                find_is_ours = false;
                 if (FR_OK == find_result) {
                     SET_CPU_AX(18); // No more files
                     SET_CPU_FL_CF(1);
@@ -724,11 +830,10 @@ static bool int2f_callback(CPUI386 *cpu, void *opaque) {
     if (cpu_get_ah(cpu) != 0x11) {
         return false; /* not handled, let BIOS chain */
     }
-    return false;
-    bool ok = redirector_handler_impl();
-    if (!ok)
-        SET_CPU_FL_CF(1);
-    return true;
+    debug_log("redirector_handler_impl -> 0x%04x\n", CPU_AX);
+    bool res = redirector_handler_impl();
+    debug_log("redirector_handler_impl <-(%d) 0x%04x %d\n", res, CPU_AX, CPU_FL_CF);
+    return res;
 }
 
 void netredirect_init(CPUI386 *cpu) {

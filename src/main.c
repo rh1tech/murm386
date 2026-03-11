@@ -922,6 +922,10 @@ static void show_welcome_screen(void) {
     // Animate plasma background for 7 seconds (700 frames at ~10ms each)
     // Window area is skipped by osd_draw_plasma_background, so it won't flicker
     for (int frame = 0; frame < 700; frame++) {
+        ps2kbd_tick();
+        int is_down = 0, keycode = 0;
+        ps2kbd_get_key(&is_down, &keycode);
+        if (is_down) break;
         osd_draw_plasma_background(frame * 3, wx, wy, ww, wh);
         sleep_ms(10);
     }
