@@ -30,8 +30,8 @@ void config_set_cpu_gen(int gen);
 int config_get_fpu(void);
 void config_set_fpu(int enabled);
 
-int config_get_fill_cmos(void);
-void config_set_fill_cmos(int enabled);
+int config_get_redirector(void);
+void config_set_redirector(int enabled);
 
 // Hardware settings (saved in [murm386] section)
 int config_get_pcspeaker(void);

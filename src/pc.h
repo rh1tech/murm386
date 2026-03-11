@@ -121,7 +121,7 @@ typedef struct {
 	const char *ata[4];
 	int iscd[4];
 	const char *fdd[2];
-	int fill_cmos;
+	int redirector;
 	int width;
 	int height;
 	int cpu_gen;

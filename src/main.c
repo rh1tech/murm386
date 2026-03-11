@@ -441,7 +441,7 @@ static void load_default_config(void) {
     config.fdd[0] = NULL;
     config.fdd[1] = NULL;
 
-    config.fill_cmos = 1;
+    config.redirector = 1;
     config.enable_serial = 0;
     config.vga_force_8dm = 0;
 }
@@ -790,7 +790,7 @@ static bool init_emulator(void) {
     config_set_mem_size_mb(config.mem_size / (1024 * 1024));
     config_set_cpu_gen(config.cpu_gen);
     config_set_fpu(config.fpu);
-    config_set_fill_cmos(config.fill_cmos);
+    config_set_redirector(config.redirector);
     // Hardware settings are loaded from [murm386] section via parse_murm386_ini
     config_clear_changes();
 
