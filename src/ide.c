@@ -1304,7 +1304,9 @@ static void idecd_exec_cmd(IDEState *s, int val)
     switch (val) {
     case WIN_DEVICE_RESET:
         ide_set_signature(s);
-        s->status = 0x00;
+        s->status = READY_STAT | SEEK_STAT;
+        s->error  = 0x01;  /* diagnostic code: drive OK */
+        ide_set_irq(s);
         break;
     case WIN_PACKETCMD:
         /* arm transfer: CPU writes 12-byte ATAPI packet into atapi_buf */
