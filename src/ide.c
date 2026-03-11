@@ -35,7 +35,7 @@
 #include <hardware/timer.h>
 
 //#define DEBUG_IDE_ATAPI
-#if DEBUG_IDE_ATAPI
+#ifdef DEBUG_IDE_ATAPI
 /* ---- ATAPI trace ---- */
 static FIL _atapi_tf;
 static int _atapi_tf_open = 0;
@@ -1753,14 +1753,16 @@ int ide_has_drive(IDEIFState *s, int drive)
     return s && drive >= 0 && drive < 2 && s->drives[drive] != NULL;
 }
 
-/* Hot-swap CD image: pass open FIL* on insert, NULL to eject */
-void ide_change_cd(IDEIFState *sif, int drive, FIL *f)
+/* Hot-swap CD image: pass open FIL* on insert, NULL to eject.
+ * was_present: 1 if a disc was loaded before this call (for correct UA signalling
+ * when eject+insert happen back-to-back without the guest seeing the empty tray). */
+void ide_change_cd(IDEIFState *sif, int drive, FIL *f, int was_present)
 {
     IDEState *s = sif->drives[drive];
-    atapi_tlog("ide_change_cd: drive=%d s=%s f=%s\r\n", drive, s?"ok":"NULL", f?"ok":"NULL");
+    atapi_tlog("ide_change_cd: drive=%d s=%s f=%s was_present=%d\r\n",
+               drive, s?"ok":"NULL", f?"ok":"NULL", was_present);
     if (!s || s->drive_kind != IDE_CD) return;
 
-    int was_present = (s->fp != NULL);
     s->fp = f;
 
     if (f) {
