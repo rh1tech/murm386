@@ -60,13 +60,13 @@ static const int mem_option_count = 4;
 static const int cpu_options[] = { 3, 4, 5 };
 static const int cpu_option_count = 3;
 
-static const int cpu_freq_options[] = { 524, 504, 378, 252 };
-static const int cpu_freq_option_count = 4;
+static const int cpu_freq_options[] = { 252, 378, 504, 524, 564 };
+static const int cpu_freq_option_count = 5;
 
-static const int psram_freq_options[] = { 166, 133, 100, 84, 66 };
+static const int psram_freq_options[] = { 66, 84, 100, 133, 166 };
 static const int psram_freq_option_count = 5;
 
-static const int flash_freq_options[] = { 166, 133, 100, 84, 66 };
+static const int flash_freq_options[] = { 66, 84, 100, 133, 166 };
 static const int flash_freq_option_count = 5;
 
 /* Voltage options: -1 = Auto, then vreg_voltage enum values.
