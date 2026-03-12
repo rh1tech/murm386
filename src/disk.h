@@ -11,7 +11,7 @@
 extern int hdcount;
 
 // Disk management functions
-void ejectdisk(uint8_t drivenum, bool atapi);
+void ejectdisk(uint8_t drivenum, bool is_fdd);
 uint8_t insertdisk(uint8_t drivenum, bool is_fdd, bool is_cd, const char *pathname);
 void disk_set_cpu(CPUI386 *cpu);
 // Disk UI API functions

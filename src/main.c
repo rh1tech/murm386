@@ -940,7 +940,10 @@ static void show_welcome_screen(void) {
 int main(void) {
     // Initialize stdio (USB Serial or UART depending on USB HID mode)
     stdio_init_all();
-
+    #ifdef PICO_DEFAULT_LED_PIN
+    gpio_init(PICO_DEFAULT_LED_PIN);
+    gpio_set_dir(PICO_DEFAULT_LED_PIN, GPIO_OUT);
+    #endif
     DBG_PRINT("\n\n");
     DBG_PRINT("============================================\n");
     DBG_PRINT("  murm386 - 386 Emulator for RP2350\n");

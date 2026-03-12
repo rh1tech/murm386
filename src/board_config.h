@@ -110,6 +110,10 @@ static inline uint get_psram_pin(void) {
 //=============================================================================
 #ifdef BOARD_M1
 
+#ifndef PICO_DEFAULT_LED_PIN
+#define PICO_DEFAULT_LED_PIN 25
+#endif
+
 // HDMI Pins
 #define HDMI_PIN_CLKN 6
 #define HDMI_PIN_CLKP 7
@@ -162,6 +166,10 @@ static inline uint get_psram_pin(void) {
 // M2 Layout Configuration
 //=============================================================================
 #ifdef BOARD_M2
+
+#ifndef PICO_DEFAULT_LED_PIN
+#define PICO_DEFAULT_LED_PIN 25
+#endif
 
 // HDMI Pins
 #define HDMI_PIN_CLKN 12

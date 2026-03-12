@@ -139,11 +139,8 @@ void disk_set_cpu(CPUI386 *cpu) {
     disk_mem = cpu_get_phys_mem(cpu);
 }
 
-void ejectdisk(uint8_t drivenum, bool atapi) {
-    /* Check floppy FIRST (drivenum < 2) to avoid drivenum aliasing with ata[].
-     * diskui passes atapi=false for both floppy and HDD; the only way to
-     * distinguish them is the atapi flag combined with drivenum range. */
-    if (drivenum < 2 && !atapi && fdd[drivenum].name) {
+void ejectdisk(uint8_t drivenum, bool is_fdd) {
+    if (drivenum < 2 && is_fdd && fdd[drivenum].name) {
         f_close(&fdd[drivenum].fil);
         free(fdd[drivenum].name);
         fdd[drivenum].name = 0;
@@ -155,21 +152,19 @@ void ejectdisk(uint8_t drivenum, bool atapi) {
         update_floppy_cmos();
         if (disk_fdc_mediachange_cb)
             disk_fdc_mediachange_cb(drivenum);
+        return;
     }
-    else if (drivenum < 4 && atapi && ata[drivenum].name) {
-        /* ATA eject: atapi=true for both HDD and CD (from GUI or insertdisk) */
+    if (drivenum < 4 && ata[drivenum].iscdrom && ata[drivenum].name) {
+        /* ATA eject: CD (from GUI or insertdisk) */
         f_close(&ata[drivenum].fil);
         free(ata[drivenum].name);
         ata[drivenum].name = 0;
-        if (ata[drivenum].iscdrom) {
-            if (disk_cdrom_change_cb)
-                disk_cdrom_change_cb(drivenum, NULL);
-        } else {
-            hdcount--;
-        }
+        if (disk_cdrom_change_cb)
+            disk_cdrom_change_cb(drivenum, NULL);
+        return;
     }
-    else if (drivenum < 4 && !atapi && ata[drivenum].name && !ata[drivenum].iscdrom) {
-        /* HDD eject via atapi=false path (e.g. from GUI for HDD drives) */
+    if (drivenum < 4 && ata[drivenum].name) {
+        /* HDD eject (e.g. from GUI for HDD drives) */
         f_close(&ata[drivenum].fil);
         free(ata[drivenum].name);
         ata[drivenum].name = 0;
@@ -189,11 +184,11 @@ uint8_t insertdisk(uint8_t drivenum, bool is_fdd, bool is_cd, const char *pathna
     if (pf->obj.fs) {
         /* Eject whatever is currently in the drive before inserting new image */
         if (is_fdd)
-            ejectdisk(drivenum, false);
-        else if (is_cd)
             ejectdisk(drivenum, true);
+        else if (is_cd)
+            ejectdisk(drivenum, false);
         else
-            ejectdisk(drivenum, false);  /* HDD: atapi=false path */
+            ejectdisk(drivenum, false);
     }
     FRESULT fres = f_open(pf, path, fmode);
     if (FR_OK != fres) {
