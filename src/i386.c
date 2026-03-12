@@ -918,7 +918,7 @@ static bool read_desc(CPUI386 *cpu, int sel, uword *w1, uword *w2)
 	return true;
 }
 
-static bool set_seg(CPUI386 *cpu, int seg, int sel)
+static bool __not_in_flash_func(set_seg)(CPUI386 *cpu, int seg, int sel)
 {
 	sel = sel & 0xffff;
 	if (!(cpu->cr0 & 1) || (cpu->flags & VM)) {
@@ -936,22 +936,113 @@ static bool set_seg(CPUI386 *cpu, int seg, int sel)
 		return true;
 	}
 
+	/* Protected mode */
+	if ((sel & ~0x3) == 0) {
+		switch(seg) {
+		case SEG_DS:
+		case SEG_ES:
+		case SEG_FS:
+		case SEG_GS:
+			/* Null selector is allowed; mark segment unusable. */
+			cpu->seg[seg].sel = sel;
+			cpu->seg[seg].base = 0;
+			cpu->seg[seg].limit = 0;
+			cpu->seg[seg].flags = 0;
+			return true;
+		case SEG_LDT:
+			/* LLDT with null selector invalidates LDTR. */
+			cpu->seg[seg].sel = 0;
+			cpu->seg[seg].base = 0;
+			cpu->seg[seg].limit = 0;
+			cpu->seg[seg].flags = 0;
+			return true;
+		case SEG_SS:
+		case SEG_CS:
+		case SEG_TR:
+			THROW(EX_GP, 0);
+		default:
+			THROW(EX_GP, 0);
+		}
+	}
+
 	uword w1, w2;
 	TRY(read_desc(cpu, sel, &w1, &w2));
 
-	// TODO: various permission checks
 	bool s = (w2 >> 12) & 1;
 	bool p = (w2 >> 15) & 1;
-	if (sel & ~0x3) {
-		switch(seg) {
-		case SEG_DS: case SEG_ES: case SEG_FS: case SEG_GS:
-			if (!s) {
-				// to avoid win95 BSOD...
+	int dpl = (w2 >> 13) & 0x3;
+	int rpl = sel & 0x3;
+	int type = (w2 >> 8) & 0xf;
+	bool code = type & 0x8;
+	bool conforming = type & 0x4;
+	bool readable = type & 0x2; /* for code segments */
+	bool writable = type & 0x2; /* for data segments */
+
+	switch(seg) {
+	case SEG_DS:
+	case SEG_ES:
+	case SEG_FS:
+	case SEG_GS:
+		/*
+		 * Allow only data segments or readable code segments.
+		 * For data/nonconforming code, require DPL >= max(CPL, RPL).
+		 * Conforming readable code is allowed without that check.
+		 */
+		if (!s) {
+			THROW(EX_GP, sel & ~0x3);
+		}
+		if (code) {
+			if (!readable) {
 				THROW(EX_GP, sel & ~0x3);
 			}
+			if (!conforming && dpl < cpu->cpl) {
+				THROW(EX_GP, sel & ~0x3);
+			}
+			if (!conforming && dpl < rpl) {
+				THROW(EX_GP, sel & ~0x3);
+			}
+		} else {
+			if (dpl < cpu->cpl) {
+				THROW(EX_GP, sel & ~0x3);
+			}
+			if (dpl < rpl) {
+				THROW(EX_GP, sel & ~0x3);
+			}
+ 		}
+		if (!p) THROW(EX_NP, sel & ~0x3);
+		break;
+	case SEG_SS:
+		/*
+		 * Conservative check:
+		 * must be present writable data segment.
+		 * Intentionally do not enforce DPL/RPL==CPL here, because this
+		 * helper is also used during ring transitions before CPL is updated.
+		 */
+		if (!s || code || !writable) {
+			THROW(EX_GP, sel & ~0x3);
 		}
-
-		if (!p) THROW((seg == SEG_SS ? EX_SS : EX_NP), sel & ~0x3);
+		if (!p) THROW(EX_SS, sel & ~0x3);
+		break;
+	case SEG_CS:
+		if (!s || !code) {
+			THROW(EX_GP, sel & ~0x3);
+		}
+		if (!p) THROW(EX_NP, sel & ~0x3);
+		break;
+	case SEG_LDT:
+		/* System descriptor, type 0x2 = LDT */
+		if (s || type != 0x2) {
+			THROW(EX_GP, sel & ~0x3);
+		}
+		if (!p) THROW(EX_NP, sel & ~0x3);
+		break;
+	case SEG_TR:
+		/* Accept available/busy 16/32-bit TSS only. */
+		if (s || !(type == 0x1 || type == 0x3 || type == 0x9 || type == 0xb)) {
+			THROW(EX_GP, sel & ~0x3);
+		}
+		if (!p) THROW(EX_NP, sel & ~0x3);
+		break;
 	}
 
 	cpu->seg[seg].sel = sel;
@@ -959,10 +1050,8 @@ static bool set_seg(CPUI386 *cpu, int seg, int sel)
 	cpu->seg[seg].limit = (w2 & 0xf0000) | (w1 & 0xffff);
 	if (w2 & 0x00800000)
 		cpu->seg[seg].limit = (cpu->seg[seg].limit << 12) | 0xfff;
-	cpu->seg[seg].flags = (w2 >> 8) & 0xffff; // (w2 >> 20) & 0xf;
+	cpu->seg[seg].flags = (w2 >> 8) & 0xffff;
 	if (seg == SEG_CS) {
-//		if ((sel & 3) != cpu->cpl)
-//			dolog("set_seg: PVL %d => %d\n", cpu->cpl, sel & 3);
 		cpu->cpl = sel & 3;
 		cpu->code16 = !(cpu->seg[SEG_CS].flags & SEG_D_BIT);
 	}
