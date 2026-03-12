@@ -3847,7 +3847,7 @@ FRESULT f_open (
 /* Read File                                                             */
 /*-----------------------------------------------------------------------*/
 
-FRESULT f_read (
+inline static FRESULT _f_read (
 	FIL* fp, 	/* Open file to be read */
 	void* buff,	/* Data buffer to store the read data */
 	UINT btr,	/* Number of bytes to read */
@@ -3939,15 +3939,31 @@ FRESULT f_read (
 	LEAVE_FF(fs, FR_OK);
 }
 
+#include "../../src/board_config.h"
+#include <hardware/gpio.h>
 
-
+FRESULT f_read (
+	FIL* fp, 	/* Open file to be read */
+	void* buff,	/* Data buffer to store the read data */
+	UINT btr,	/* Number of bytes to read */
+	UINT* br	/* Number of bytes read */
+) {
+	#ifdef PICO_DEFAULT_LED_PIN
+	gpio_put(PICO_DEFAULT_LED_PIN, 1);
+	#endif
+	FRESULT res = _f_read(fp, buff, btr, br);
+	#ifdef PICO_DEFAULT_LED_PIN
+	gpio_put(PICO_DEFAULT_LED_PIN, 0);
+	#endif
+	return res;
+}
 
 #if !FF_FS_READONLY
 /*-----------------------------------------------------------------------*/
 /* Write File                                                            */
 /*-----------------------------------------------------------------------*/
 
-FRESULT f_write (
+inline static FRESULT _f_write (
 	FIL* fp,			/* Open file to be written */
 	const void* buff,	/* Data to be written */
 	UINT btw,			/* Number of bytes to write */
@@ -4062,7 +4078,21 @@ FRESULT f_write (
 }
 
 
-
+FRESULT f_write (
+	FIL* fp,			/* Open file to be written */
+	const void* buff,	/* Data to be written */
+	UINT btw,			/* Number of bytes to write */
+	UINT* bw			/* Number of bytes written */
+) {
+	#ifdef PICO_DEFAULT_LED_PIN
+	gpio_put(PICO_DEFAULT_LED_PIN, 1);
+	#endif
+	FRESULT res = _f_write(fp, buff, btw, bw);
+	#ifdef PICO_DEFAULT_LED_PIN
+	gpio_put(PICO_DEFAULT_LED_PIN, 0);
+	#endif
+	return res;
+}
 
 /*-----------------------------------------------------------------------*/
 /* Synchronize the File                                                  */
