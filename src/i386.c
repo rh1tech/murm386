@@ -2318,9 +2318,9 @@ static bool call_isr(CPUI386 *cpu, int no, bool pusherr, int ext);
 		saddr16(&meml, lseg(seg)); \
 	} else { \
 		uword sp = lreg32(4); \
-		TRY(translate16(cpu, &meml, 2, SEG_SS, (sp - 4) & sp_mask)); \
+		TRY(translate32(cpu, &meml, 2, SEG_SS, (sp - 4) & sp_mask)); \
 		set_sp(sp - 4, sp_mask); \
-		saddr16(&meml, lseg(seg)); \
+		saddr32(&meml, lseg(seg)); \
 	}
 #define PUSH_ES() PUSHSeg(SEG_ES)
 #define PUSH_CS() PUSHSeg(SEG_CS)
@@ -2337,8 +2337,8 @@ static bool call_isr(CPUI386 *cpu, int no, bool pusherr, int ext);
 		set_sp(sp + 2, sp_mask); \
 	} else { \
 		uword sp = lreg32(4); \
-		TRY(translate16(cpu, &meml, 1, SEG_SS, sp & sp_mask)); \
-		TRY(set_seg(cpu, seg, laddr16(&meml))); \
+		TRY(translate32(cpu, &meml, 1, SEG_SS, sp & sp_mask)); \
+		TRY(set_seg(cpu, seg, laddr32(&meml))); \
 		set_sp(sp + 4, sp_mask); \
 	}
 #define POP_ES() POPSeg(SEG_ES)
@@ -4409,7 +4409,7 @@ static bool IRAM_ATTR call_isr(CPUI386 *cpu, int no, bool pusherr, int ext)
 			saddr16(&meml2, cpu->seg[SEG_CS].sel);
 			saddr16(&meml3, cpu->ip);
 			if (pusherr) {
-				saddr32(&meml4, cpu->excerr);
+				saddr16(&meml4, cpu->excerr);
 				set_sp(sp - 2 * 4, sp_mask);
 			} else {
 				set_sp(sp - 2 * 3, sp_mask);
