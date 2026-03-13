@@ -135,25 +135,47 @@ static int bin2bcd(int a)
 	return ((a / 10) << 4) | (a % 10);
 }
 
+static int month_from_str(const char *m)
+{
+    static const char *months = "JanFebMarAprMayJunJulAugSepOctNovDec";
+    for (int i = 0; i < 12; i++) {
+        if (strncmp(m, months + i * 3, 3) == 0)
+            return i + 1;
+    }
+    return 1;
+}
+
 static void cmos_update_time(CMOS *s)
 {
-	struct tm tm;
-	time_t ti;
+    /* Parse compile date: "Mmm dd yyyy" */
+    const char *d = __DATE__;
 
-	ti = time(NULL);
-#ifndef _WIN32
-	gmtime_r(&ti, &tm);
-#else
-	gmtime_s(&tm, &ti);
-#endif
-	s->data[0] = bin2bcd(tm.tm_sec);
-	s->data[2] = bin2bcd(tm.tm_min);
-	s->data[4] = bin2bcd(tm.tm_hour);
-	s->data[6] = bin2bcd(tm.tm_wday);
-	s->data[7] = bin2bcd(tm.tm_mday);
-	s->data[8] = bin2bcd(tm.tm_mon + 1);
-	s->data[9] = bin2bcd(tm.tm_year % 100);
-	s->data[0x32] = bin2bcd((tm.tm_year / 100) + 19);
+    int month = month_from_str(d);
+    int day = (d[4] == ' ') ? (d[5] - '0') : (10 * (d[4] - '0') + (d[5] - '0'));
+    int year = (d[7] - '0') * 1000 +
+               (d[8] - '0') * 100 +
+               (d[9] - '0') * 10 +
+               (d[10] - '0');
+
+    /* Optional: parse compile time */
+    const char *t = __TIME__;
+    int hour = (t[0] - '0') * 10 + (t[1] - '0');
+    int min  = (t[3] - '0') * 10 + (t[4] - '0');
+    int sec  = (t[6] - '0') * 10 + (t[7] - '0');
+
+    s->data[0] = bin2bcd(sec);
+    s->data[2] = bin2bcd(min);
+    s->data[4] = bin2bcd(hour);
+
+    /* weekday неизвестен — можно оставить 1 */
+    s->data[6] = bin2bcd(1);
+
+    s->data[7] = bin2bcd(day);
+    s->data[8] = bin2bcd(month);
+    s->data[9] = bin2bcd(year % 100);
+
+    /* century */
+    s->data[0x32] = bin2bcd(year / 100);
 }
 
 void cmos_set_floppy_types(CMOS *c, uint8_t type_a, uint8_t type_b) {
@@ -182,10 +204,17 @@ CMOS *cmos_init(long mem_size, int irq, void *pic, void (*set_irq)(void *pic, in
 			c->data[0x34] = mem_size >> 16;
 		} else {
 			mem_size -= 1024 * 1024;
-			c->data[0x31] = mem_size >> 18;
-			c->data[0x30] = mem_size >> 10;
+			uint32_t ext_kb = mem_size >> 10;
+			c->data[0x31] = ext_kb >> 8;
+			c->data[0x30] = ext_kb & 0xff;
 		}
 	}
+	/* old AT extended memory field */
+	c->data[0x16] = c->data[0x31];
+	c->data[0x15] = c->data[0x30];
+	// extended memory above 16MB mirror
+	c->data[0x17] = c->data[0x35];
+	c->data[0x18] = c->data[0x34];
 	return c;
 }
 
