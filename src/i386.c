@@ -29,15 +29,48 @@
 typedef void FPU;
 #endif
 
-#define dolog(...) fprintf(stderr, __VA_ARGS__)
+// #define DEBUG_CPU 1
+#ifdef DEBUG_CPU
+#include <stdarg.h>
+#include "ff.h"
+void dolog(const char *fmt, ...)
+{
+	static FIL _tf;
+	static int _tf_open = 0;
+    if (!_tf_open) _tf_open = (f_open(&_tf, "386/cpu.txt", FA_WRITE | FA_OPEN_APPEND | FA_OPEN_ALWAYS) == FR_OK);
+    if (!_tf_open) return;
+    char buf[256];
+    va_list ap;
+    va_start(ap, fmt);
+    int len = vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    if (len < 0) return;
+    if (len > (int)sizeof(buf)) len = sizeof(buf);
+    UINT bw;
+    f_write(&_tf, buf, len, &bw);
+    f_sync(&_tf);
+}
+#else
+#define dolog(...) (void)0
+#endif
+
 #define likely(x) __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
 #define wordmask ((uword) ((sword) -1))
 #define TRY(f) if(!(f)) { return false; }
 #define TRYL(f) if(unlikely(!(f))) { return false; }
 #define TRY1(f) if(unlikely(!(f))) { dolog("@ %s %s %d\n", __FILE__, __FUNCTION__, __LINE__); cpu_abort(cpu, -1); }
-#define THROW(ex, err) do { cpu->excno = (ex); cpu->excerr = (err); return false; } while(0)
-#define THROW0(ex) do { cpu->excno = (ex); return false; } while(0)
+#define THROW(ex, err) do { \
+    dolog("THROW ex=%d err=%x eip=%08x cs=%04x %s:%s\n", \
+          (ex), (unsigned)(err), cpu->ip, cpu->seg[SEG_CS].sel,  __func__, __LINE__); \
+    cpu->excno = (ex); cpu->excerr = (err); \
+	return false; \
+} while(0)
+#define THROW0(ex) do { \
+    dolog("THROW0 ex=%d eip=%08x cs=%04x\n", (ex), cpu->ip, cpu->seg[SEG_CS].sel); \
+	cpu->excno = (ex); \
+	return false; \
+} while(0)
 
 // the second branchless version works better on gcc
 //#define SET_BIT(w, f, m) ((w) ^= ((-(uword)(f)) ^ (w)) & (m))
@@ -534,9 +567,10 @@ static bool IRAM_ATTR translate_laddr(CPUI386 *cpu, OptAddr *res, int rwm, uword
 
 static bool __not_in_flash_func(segcheck)(CPUI386 *cpu, int rwm, int seg, uword addr, int size)
 {
-	if (cpu->cr0 & 1) {
+	if ((cpu->cr0 & 1) && !(cpu->flags & VM)) {
 		/* null selector check */
 		if (cpu->seg[seg].limit == 0 && (cpu->seg[seg].sel & ~0x3) == 0) {
+			dolog("segcheck null: seg=%d sel=%04x addr=%08x\n", seg, cpu->seg[seg].sel, addr);
 			THROW(seg == SEG_SS ? EX_SS : EX_GP, 0);
 		}
 		/* limit check */
@@ -562,6 +596,10 @@ static bool __not_in_flash_func(segcheck)(CPUI386 *cpu, int rwm, int seg, uword 
 			over = wrap || last > limit;
 		}
 		if (over) {
+			dolog("segcheck limit: seg=%d sel=%04x type=%x flags=%04x "
+			      "addr=%08x size=%d limit=%08x expand_down=%d cpl=%d eip=%08x\n",
+			      seg, cpu->seg[seg].sel, type, (unsigned)flags,
+			      addr, size, limit, (int)expand_down, cpu->cpl, cpu->ip);
 			THROW(seg == SEG_SS ? EX_SS : EX_GP, 0);
 		}
 		/*
@@ -571,10 +609,15 @@ static bool __not_in_flash_func(segcheck)(CPUI386 *cpu, int rwm, int seg, uword 
 		 *
 		 * Keep this conservative: only reject definite writes.
 		 */
-		#if 0 // TODO: win95 failed on this point, so turned off for a while
+		#if 1 // TODO: win95 failed on this point, so turned off for a while
 		if (rwm > 1 && cpu->cpl != 0 /* check it, but not in ring 0 */) {
 			if (code || !writable) {
-				THROW(seg == SEG_SS ? EX_SS : EX_GP, 0);
+				dolog("segcheck write: seg=%d sel=%04x type=%x flags=%04x "
+					"addr=%08x size=%d cpl=%d eip=%08x\n",
+					seg, cpu->seg[seg].sel, type, (unsigned)flags,
+					addr, size, cpu->cpl, cpu->ip);
+        		uword errcode = (seg == SEG_SS) ? 0 : (cpu->seg[seg].sel & ~0x3);
+		        THROW(seg == SEG_SS ? EX_SS : EX_GP, errcode);
 			}
 		}
 		#endif
@@ -4403,7 +4446,7 @@ static bool pmcall(CPUI386 *cpu, bool opsz16, uword addr, int sel, bool isjmp)
 // 1: intra PVL
 // 2: inter PVL
 // 3: from v8086
-static int __call_isr_check_cs(CPUI386 *cpu, int sel, int ext, int *csdpl)
+static int __not_in_flash_func(__call_isr_check_cs)(CPUI386 *cpu, int sel, int ext, int *csdpl)
 {
 	sel = sel & 0xffff;
 	OptAddr meml;
@@ -4417,8 +4460,10 @@ static int __call_isr_check_cs(CPUI386 *cpu, int sel, int ext, int *csdpl)
 		base = cpu->gdt.base;
 		limit = cpu->gdt.limit;
 	}
-	if ((sel & ~0x3) == 0 || off + 7 > limit)
-		THROW(EX_GP, ext);
+	if ((sel & ~0x3) == 0 || off + 7 > limit) {
+		dolog("__call_isr_check_cs null/limit: sel=%04x off=%x limit=%x\n", sel, off, limit);
+    	THROW(EX_GP, ext);
+	}
 
 	TRY1(translate_laddr(cpu, &meml, 1, base + off + 4, 4, 0));
 	uword w2 = load32(cpu, &meml);
@@ -4428,8 +4473,11 @@ static int __call_isr_check_cs(CPUI386 *cpu, int sel, int ext, int *csdpl)
 	int dpl = (w2 >> 13) & 0x3;
 	int p = (w2 >> 15) & 1;
 	*csdpl = dpl;
-	if (!s || !code || dpl > cpu->cpl)
+	if (!s || !code || dpl > cpu->cpl) {
+	    dolog("__call_isr_check_cs: sel=%04x s=%d code=%d dpl=%d cpl=%d ext=%d w2=%08x\n",
+    	      sel, s, code, dpl, cpu->cpl, ext, w2);
 		THROW(EX_GP, (sel & ~0x3) | ext);
+	}
 
 	if (!p) THROW(EX_NP, sel & ~0x3);
 
@@ -4456,6 +4504,7 @@ static int __call_isr_check_cs(CPUI386 *cpu, int sel, int ext, int *csdpl)
 			}
 		}
 	}
+	__builtin_unreachable();
 }
 
 static bool IRAM_ATTR call_isr(CPUI386 *cpu, int no, bool pusherr, int ext)
@@ -4776,7 +4825,7 @@ static bool __pmiret_check_cs_same(CPUI386 *cpu, int sel)
 	return true;
 }
 
-static bool __pmiret_check_cs_outer(CPUI386 *cpu, int sel)
+static bool __not_in_flash_func(__pmiret_check_cs_outer)(CPUI386 *cpu, int sel)
 {
 	sel = sel & 0xffff;
 	if ((sel & ~0x3) == 0) {
@@ -4792,17 +4841,21 @@ static bool __pmiret_check_cs_outer(CPUI386 *cpu, int sel)
 	int dpl = (w2 >> 13) & 0x3;
 	int p = (w2 >> 15) & 1;
 	int rpl = sel & 3;
-
+	
 	if (!s || !code) THROW(EX_GP, sel & ~0x3);
 
 	if (!conforming) {
 		if (dpl != rpl) THROW(EX_GP, sel & ~0x3);
 	} else {
-		if (dpl <= cpu->cpl) THROW(EX_GP, sel & ~0x3);
+    	// conforming: DPL must be <= RPL (Intel SDM Vol.2, IRET, outer privilege)
+    	if (dpl > rpl) {
+			dolog("__pmiret_check_cs_outer: DPL (%04x) must be <= RPL (%04x) %04x\n", dpl, rpl, sel);
+			THROW(EX_GP, sel & ~0x3);
+		}
 	}
 
 	if (!p) {
-//		dolog("__pmiret_check_cs_outer: seg not present %04x\n", sel);
+		dolog("__pmiret_check_cs_outer: seg not present %04x\n", sel);
 		THROW(EX_NP, sel & ~0x3);
 	}
 	return true;
