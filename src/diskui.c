@@ -36,29 +36,35 @@ static const DriveInfo drive_table[DRIVE_TOTAL] = {
     { "ATA1-1", "ATA Disk" },  // DRIVE_ATA1_1
 };
 
+// File listing (reduced size to save SRAM)
+#define MAX_FILES        24
+#define MAX_FILENAME_LEN 32
+
 // Menu state
 static MenuState menu_state   = MENU_CLOSED;
-static int selected_row       = 0;  // Current row in main menu (0..DRIVE_TOTAL = "Save and Reset")
+static int selected_row       = 0;  // Current row in main menu (0..DRIVE_TOTAL-1)
 static int selected_file      = 0;
 static int file_scroll_offset = 0;
 // selected_row intentionally persists between open/close — preserves position
 
-// File listing (reduced size to save SRAM)
-#define MAX_FILES        24
-#define MAX_FILENAME_LEN 32
+// Pending changes: track what the user wants for each drive
+// Empty string = eject, non-empty = new filename
+static char pending_filename[DRIVE_TOTAL][MAX_FILENAME_LEN];
+static bool pending_changed[DRIVE_TOTAL];  // true if user modified this drive
+static bool reboot_required;               // true if any ATA drive was changed
 static char file_list[MAX_FILES][MAX_FILENAME_LEN];
 static int  file_count   = 0;
 static int  plasma_frame = 0;  // Animation frame counter
 
-// Total rows in main menu: drive rows + "Save and Reset"
+// Bottom row index: either "Save and Exit" or "Save and Reboot"
 #define MAIN_MENU_ROWS  (DRIVE_TOTAL + 1)
-#define ROW_SAVE_RESET   DRIVE_TOTAL   // Index of the "Save and Reset" entry
+#define ROW_ACTION       DRIVE_TOTAL
 
 // UI dimensions — height adapts to number of rows
 #define MENU_X      10
-#define MENU_Y      5
+#define MENU_Y      4
 #define MENU_W      60
-#define MENU_H      (5 + MAIN_MENU_ROWS)  // top border(2) + rows + bottom border(2)
+#define MENU_H      (8 + MAIN_MENU_ROWS)  // border(2) + rows + blank + notification + blank + action + border(2)
 
 #define FILE_X      12
 #define FILE_Y      7
@@ -71,7 +77,9 @@ static void draw_main_menu(void);
 static void draw_file_browser(void);
 static void scan_disk_images(int drive_idx);
 static void select_file(void);
-static void eject_disk(void);
+static void eject_pending(void);
+static void apply_and_close(void);
+static void reset_pending(void);
 
 // --------------------------------------------------------------------------
 // Helpers
@@ -85,6 +93,15 @@ static const char *get_drive_filename(int drive_idx) {
     }
 }
 
+// Get the display filename for a drive (pending or current)
+static const char *get_display_filename(int drive_idx) {
+    if (pending_changed[drive_idx]) {
+        if (pending_filename[drive_idx][0] == '\0') return NULL;  // pending eject
+        return pending_filename[drive_idx];
+    }
+    return get_drive_filename(drive_idx);
+}
+
 static bool file_is_iso(const char *filename) {
     if (!filename) return false;
     char *ext = strrchr(filename, '.');
@@ -94,7 +111,6 @@ static bool file_is_iso(const char *filename) {
 }
 
 // Returns true if the extension is valid for the given drive type.
-// CD-ROM drives only accept .iso; other drives accept .img/.ima/.vhd/.bin.
 static bool ext_accepted_for_drive(const char *ext, int drive_idx) {
     if (strcasecmp(ext, ".iso") == 0) return true;
     if (strcasecmp(ext, ".img") == 0) return true;
@@ -102,6 +118,14 @@ static bool ext_accepted_for_drive(const char *ext, int drive_idx) {
     if (strcasecmp(ext, ".vhd") == 0) return true;
     if (strcasecmp(ext, ".bin") == 0) return true;
     return false;
+}
+
+static void reset_pending(void) {
+    for (int i = 0; i < DRIVE_TOTAL; i++) {
+        pending_changed[i] = false;
+        pending_filename[i][0] = '\0';
+    }
+    reboot_required = false;
 }
 
 // --------------------------------------------------------------------------
@@ -114,13 +138,14 @@ void diskui_init(void) {
     selected_row  = 0;
     selected_file = 0;
     file_count    = 0;
+    reset_pending();
 }
 
 void diskui_open(void) {
     if (menu_state != MENU_CLOSED) return;
 
+    reset_pending();
     menu_state = MENU_MAIN;
-    // selected_row is NOT reset — position is preserved between openings
     osd_clear();
     osd_show();
     draw_main_menu();
@@ -128,6 +153,7 @@ void diskui_open(void) {
 
 void diskui_close(void) {
     menu_state = MENU_CLOSED;
+    reset_pending();
     osd_hide();
 }
 
@@ -162,7 +188,7 @@ static void draw_main_menu(void) {
         snprintf(line, sizeof(line), "[%-7s] %-10s", drive_table[i].label, drive_table[i].type_name);
         osd_print(MENU_X + 2, y, line, attr);
 
-        const char *filename = get_drive_filename(i);
+        const char *filename = get_display_filename(i);
         if (filename) {
             char truncated[24];
             strncpy(truncated, filename, 23);
@@ -179,16 +205,26 @@ static void draw_main_menu(void) {
         }
     }
 
-    // "Save and Reset" row
+    // Blank line + reboot notification + blank line
+    int notify_y = MENU_Y + 3 + DRIVE_TOTAL;
+    if (reboot_required) {
+        osd_print_center(notify_y, "! Reboot required for HDD changes !", OSD_ATTR(OSD_WHITE, OSD_RED));
+    }
+
+    // Action row
+    int action_y = MENU_Y + 5 + DRIVE_TOTAL;
     {
-        int y = MENU_Y + 2 + ROW_SAVE_RESET;
-        uint8_t attr = (selected_row == ROW_SAVE_RESET) ? OSD_ATTR_SELECTED : OSD_ATTR_HIGHLIGHT;
-        osd_fill(MENU_X + 2, y, MENU_W - 4, 1, ' ', attr);
-        osd_print_center(y, "[ Save and Reset ]", attr);
+        uint8_t attr = (selected_row == ROW_ACTION) ? OSD_ATTR_SELECTED : OSD_ATTR_HIGHLIGHT;
+        osd_fill(MENU_X + 2, action_y, MENU_W - 4, 1, ' ', attr);
+        if (reboot_required) {
+            osd_print_center(action_y, "[ Save and Reboot ]", attr);
+        } else {
+            osd_print_center(action_y, "[ Save and Exit ]", attr);
+        }
     }
 
     int help_y = MENU_Y + MENU_H - 2;
-    osd_print(MENU_X + 2, help_y, "\x18/\x19: Navigate   Enter: Select/Eject   Esc: Close", OSD_ATTR_HIGHLIGHT);
+    osd_print_center(help_y, "\x18/\x19: Navigate   Enter: Select/Eject   Esc: Cancel", OSD_ATTR_HIGHLIGHT);
 }
 
 static void draw_file_browser(void) {
@@ -287,36 +323,61 @@ static void scan_disk_images(int drive_idx) {
 static void select_file(void) {
     if (file_count == 0 || selected_file >= file_count) return;
 
-    const char *filename = file_list[selected_file];
     int drive_idx = selected_row;
+    strncpy(pending_filename[drive_idx], file_list[selected_file], MAX_FILENAME_LEN - 1);
+    pending_filename[drive_idx][MAX_FILENAME_LEN - 1] = '\0';
+    pending_changed[drive_idx] = true;
 
-    if (drive_idx < 2) {
-        // FDD-0 / FDD-1
-        if (insertdisk(drive_idx, true, false, filename)) {
-            config_save_disks();
-        }
-    } else {
-        // ATA drives: ata_index is offset by 2
-        int ata_index = drive_idx - 2;
-        bool is_cdrom = file_is_iso(filename);
-        if (insertdisk(ata_index, false, is_cdrom, filename)) {
-            config_save_disks();
-        }
-    }
+    if (drive_idx >= 2) reboot_required = true;
 
     menu_state = MENU_MAIN;
     draw_main_menu();
 }
 
-static void eject_disk(void) {
+static void eject_pending(void) {
     int drive_idx = selected_row;
-    if (drive_idx < 2) {
-        ejectdisk(drive_idx, true);
-    } else {
-        ejectdisk(drive_idx - 2, false);
-    }
-    config_save_disks();
+    pending_filename[drive_idx][0] = '\0';
+    pending_changed[drive_idx] = true;
+
+    if (drive_idx >= 2) reboot_required = true;
+
     draw_main_menu();
+}
+
+static void apply_and_close(void) {
+    // Apply all pending changes
+    for (int i = 0; i < DRIVE_TOTAL; i++) {
+        if (!pending_changed[i]) continue;
+
+        if (pending_filename[i][0] == '\0') {
+            // Eject
+            if (i < 2) {
+                ejectdisk(i, true);
+            } else {
+                ejectdisk(i - 2, false);
+            }
+        } else {
+            // Insert
+            if (i < 2) {
+                insertdisk(i, true, false, pending_filename[i]);
+            } else {
+                int ata_index = i - 2;
+                bool is_cdrom = file_is_iso(pending_filename[i]);
+                insertdisk(ata_index, false, is_cdrom, pending_filename[i]);
+            }
+        }
+    }
+
+    config_save_disks();
+
+    if (reboot_required) {
+        *(uint32_t*)(0x20000000 + (512ul << 10) - 32) = 0x1927fa52;
+        watchdog_reboot(0, 0, 0);
+        while (true);
+        __unreachable();
+    }
+
+    diskui_close();
 }
 
 // --------------------------------------------------------------------------
@@ -340,16 +401,13 @@ bool diskui_handle_key(int keycode, bool is_down) {
                     break;
 
                 case KEY_ENTER: {
-                    if (selected_row == ROW_SAVE_RESET) {
-                        config_save_disks();
-                        *(uint32_t*)(0x20000000 + (512ul << 10) - 32) = 0x1927fa52; // magic to fast reboot
-                        watchdog_reboot(0, 0, 0);
-                        while (true);
-                        __unreachable();
+                    if (selected_row == ROW_ACTION) {
+                        apply_and_close();
+                        break;
                     }
-                    const char *filename = get_drive_filename(selected_row);
+                    const char *filename = get_display_filename(selected_row);
                     if (filename) {
-                        eject_disk();
+                        eject_pending();
                     } else {
                         scan_disk_images(selected_row);
                         menu_state = MENU_FILE_BROWSER;

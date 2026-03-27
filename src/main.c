@@ -878,7 +878,7 @@ static void __not_in_flash_func(core1_entry)(void) {
 
 static void show_welcome_screen(void) {
     // Welcome screen dimensions
-    int wx = 14, wy = 6, ww = 51, wh = 13;
+    int wx = 14, wy = 6, ww = 51, wh = 14;
 
     osd_clear();
 
@@ -887,35 +887,35 @@ static void show_welcome_screen(void) {
     osd_fill(wx + 1, wy + 1, ww - 2, wh - 2, ' ', OSD_ATTR_NORMAL);
 
     // Title
-    osd_print_center(wy + 2, "FRANK 386", OSD_ATTR(OSD_YELLOW, OSD_BLUE));
+    osd_print_center(wy + 3, "FRANK 386", OSD_ATTR(OSD_YELLOW, OSD_BLUE));
 
     // Version
     char version_str[32];
     snprintf(version_str, sizeof(version_str), "Version %d.%02d",
              FRANK_386_VERSION_MAJOR, FRANK_386_VERSION_MINOR);
-    osd_print_center(wy + 4, version_str, OSD_ATTR_NORMAL);
+    osd_print_center(wy + 5, version_str, OSD_ATTR_NORMAL);
 
     // Author
-    osd_print_center(wy + 5, "Port by Mikhail Matveev & DnCraptor", OSD_ATTR_NORMAL);
-    osd_print_center(wy + 6, "https://github.com/rh1tech/frank-386", OSD_ATTR_NORMAL);
+    osd_print_center(wy + 6, "Port by Mikhail Matveev & DnCraptor", OSD_ATTR_NORMAL);
+    osd_print_center(wy + 7, "https://github.com/rh1tech/frank-386", OSD_ATTR_NORMAL);
 
     // Hardware info
     char hw_str[50];
-    snprintf(hw_str, sizeof(hw_str), "RP2350 @ %d MHz / PSRAM @ %d MHz / FLASH @ %d MHz",
+    snprintf(hw_str, sizeof(hw_str), "RP: %d, PSRAM: %d, Flash: %d",
              config_get_cpu_freq(), config_get_psram_freq(), config_get_flash_freq());
-    osd_print_center(wy + 8, hw_str, OSD_ATTR(OSD_LIGHTCYAN, OSD_BLUE));
+    osd_print_center(wy + 9, hw_str, OSD_ATTR(OSD_LIGHTCYAN, OSD_BLUE));
 
     // Platform (green text)
 #ifdef BOARD_M1
-    osd_print_center(wy + 9, "Platform: M1", OSD_ATTR(OSD_LIGHTGREEN, OSD_BLUE));
+    osd_print_center(wy + 10, "Platform: M1", OSD_ATTR(OSD_LIGHTGREEN, OSD_BLUE));
 #elif defined(BOARD_M2)
-    osd_print_center(wy + 9, "Platform: M2", OSD_ATTR(OSD_LIGHTGREEN, OSD_BLUE));
+    osd_print_center(wy + 10, "Platform: M2", OSD_ATTR(OSD_LIGHTGREEN, OSD_BLUE));
 #elif defined(BOARD_PC)
-    osd_print_center(wy + 9, "Platform: Olimex PICO-PC", OSD_ATTR(OSD_LIGHTGREEN, OSD_BLUE));
+    osd_print_center(wy + 10, "Platform: Olimex PICO-PC", OSD_ATTR(OSD_LIGHTGREEN, OSD_BLUE));
 #elif defined(BOARD_Z2)
-    osd_print_center(wy + 9, "Platform: RP2350-PiZero", OSD_ATTR(OSD_LIGHTGREEN, OSD_BLUE));
+    osd_print_center(wy + 10, "Platform: RP2350-PiZero", OSD_ATTR(OSD_LIGHTGREEN, OSD_BLUE));
 #else
-    osd_print_center(wy + 9, "Platform: Unknown", OSD_ATTR(OSD_LIGHTGREEN, OSD_BLUE));
+    osd_print_center(wy + 10, "Platform: Unknown", OSD_ATTR(OSD_LIGHTGREEN, OSD_BLUE));
 #endif
 
     osd_show();

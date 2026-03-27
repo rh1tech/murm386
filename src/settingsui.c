@@ -383,16 +383,18 @@ static void draw_settings_menu(void) {
                 snprintf(value, sizeof(value), "< %d MHz >", config_get_flash_freq());
                 break;
         }
-        osd_print(MENU_X + 25, y, value, attr);
+        // Right-align value
+        int val_len = strlen(value);
+        osd_print(MENU_X + MENU_W - 4 - val_len, y, value, attr);
     }
 
     // Show if changes pending
     if (config_has_changes()) {
-        osd_print(MENU_X + 3, MENU_Y + MENU_H - 4, "* Changes pending - Enter to apply", OSD_ATTR_HIGHLIGHT);
+        osd_print_center(MENU_Y + MENU_H - 4, "* Changes pending - Enter to apply", OSD_ATTR_HIGHLIGHT);
     }
 
-    // Help
-    osd_print(MENU_X + 2, MENU_Y + MENU_H - 2, "\x18\x19:Select  \x1b\x1a:Change  Enter:Apply  Esc:Cancel", OSD_ATTR_HIGHLIGHT);
+    // Help (centered)
+    osd_print_center(MENU_Y + MENU_H - 2, "\x18\x19: Select  \x1b\x1a: Change  Enter: Apply  Esc: Cancel", OSD_ATTR_HIGHLIGHT);
 }
 
 static void draw_confirm_dialog(void) {
