@@ -1,58 +1,52 @@
 # FRANK 386
 
-i386 PC Emulator for RP2350 (Raspberry Pi Pico 2) with VGA output, SD card storage, PS/2 and USB keyboard, and audio output.
+i386 PC Emulator for RP2350 (Raspberry Pi Pico 2) with VGA/HDMI output, SD card storage, PS/2 and USB keyboard/mouse, NES gamepad, and audio output.
 
 Based on [Tiny386](https://github.com/hchunhui/tiny386) by Chunhui He.
 
 ## Features
 
 - Full i386 (and partially i486/i586) CPU emulation with optional x87 FPU
-- Up to 7MB RAM (using 8MB PSRAM)
-- VGA graphics output (text modes and graphics up to 640x480)
-- Sound: AdLib OPL2, Sound Blaster 16, PC Speaker
+- Up to 8MB RAM (using 8MB PSRAM)
+- VGA and HDMI graphics output (text modes and graphics up to 640x480)
+- Sound: AdLib OPL2, Sound Blaster 16, PC Speaker, Tandy, Covox, Disney Sound Source
 - SD card support for floppy, hard disk, and CD-ROM images
 - Runtime disk manager (Win+F12) for hot-swapping disk images
 - Settings menu (Win+F11) for changing emulator configuration
-- PS/2 keyboard input
+- PS/2 keyboard and mouse input
 - USB keyboard and mouse input (via native USB Host)
-- Boots DOS, Windows 3.x/95, Linux, and more
+- NES gamepad support with mouse emulation mode
+- Boots DOS, Windows 3.x, **Windows 95**, Linux, and more
 
 ## Supported Boards
 
-This firmware is designed for RP2350-based boards with integrated VGA, SD card, and keyboard input:
+This firmware is designed for RP2350-based boards with integrated VGA/HDMI, SD card, and keyboard input:
 
-- **[Murmulator](https://murmulator.ru)** - A compact retro-computing platform based on RP Pico 2
+- **[Murmulator](https://murmulator.ru)** - A compact retro-computing platform based on RP Pico 2 (M1 and M2 variants)
 - **[FRANK](https://rh1.tech/projects/frank?area=about)** - A versatile development board with VGA output
-
-Both boards provide all necessary peripherals out of the box.
+- **[Olimex PICO-PC](https://www.olimex.com/)** - Olimex RP2350 PC board
+- **[Waveshare RP2350-PiZero](https://www.waveshare.com/)** - Waveshare RP2350 board
 
 ## Hardware Requirements
 
 - **Raspberry Pi Pico 2** (RP2350) or compatible board
 - **8MB PSRAM** (required for extended memory)
-- **VGA connector** (accent resistor DAC)
+- **VGA or HDMI connector**
 - **SD card module** (SPI mode)
 - **PS/2 keyboard** (directly connected) - OR - **USB keyboard** (via native USB port)
-- **Audio output** (optional):
-  - **I2S DAC module** (e.g., TDA1387 or PCM5102) - recommended for best quality
+- **Audio output** (optional): I2S DAC or PWM
 
 > **Note:** When USB HID is enabled, the native USB port is used for keyboard/mouse input. USB serial console (CDC) is disabled in this mode; use UART for debug output.
 
 ## Board Configurations
 
-Two GPIO layouts are supported: **M1** and **M2**.
+Four GPIO layouts are supported: **M1**, **M2**, **PC** (Olimex), and **Z2** (Waveshare).
 
-### VGA (accent resistor DAC)
+### VGA / HDMI
 | Signal | M1 GPIO | M2 GPIO |
 |--------|---------|---------|
-| HSYNC  | 6       | 12      |
-| VSYNC  | 7       | 13      |
-| R0     | 8       | 14      |
-| R1     | 9       | 15      |
-| G0     | 10      | 16      |
-| G1     | 11      | 17      |
-| B0     | 12      | 18      |
-| B1     | 13      | 19      |
+| Base   | 6       | 12      |
+| Range  | 6-13    | 12-19   |
 
 ### SD Card (SPI mode)
 | Signal  | M1 GPIO | M2 GPIO |
@@ -67,6 +61,19 @@ Two GPIO layouts are supported: **M1** and **M2**.
 |--------|---------|---------|
 | CLK    | 0       | 2       |
 | DATA   | 1       | 3       |
+
+### PS/2 Mouse
+| Signal | M1 GPIO | M2 GPIO |
+|--------|---------|---------|
+| CLK    | 14      | 0       |
+| DATA   | 15      | 1       |
+
+### NES/SNES Gamepad
+| Signal | M1 GPIO | M2 GPIO |
+|--------|---------|---------|
+| CLK    | 14      | 20      |
+| DATA   | 16      | 26      |
+| LATCH  | 15      | 21      |
 
 ### I2S Audio
 | Signal | M1 GPIO | M2 GPIO |
@@ -102,7 +109,7 @@ Create `386/config.ini`:
 
 ```ini
 [pc]
-mem=2M
+mem=8M
 bios=bios.bin
 vga_bios=vgabios.bin
 
@@ -154,13 +161,14 @@ Changes made via Disk Manager are saved to `config.ini` automatically.
 ### Settings Menu (Win+F11)
 
 Configure emulator settings at runtime:
-- Memory size (1-7 MB)
+- Memory size (1-8 MB)
 - CPU generation (386/486/586)
 - FPU emulation on/off
-- Sound devices on/off
-- Mouse support on/off
-- RP2350 CPU frequency (378/504 MHz)
-- PSRAM frequency (133/166 MHz)
+- Sound devices (AdLib, SB16, PC Speaker, Tandy, Covox, MPU-401, DSS)
+- PS/2 or USB Mouse on/off
+- NES Mouse on/off (emulate mouse with NES gamepad D-pad, B=left click, A=right click)
+- RP2350 CPU frequency and voltage
+- PSRAM / Flash frequency
 
 Settings are saved to `config.ini` and take effect after restart.
 
@@ -186,17 +194,14 @@ Manage disk images without restarting:
 git clone https://github.com/rh1tech/frank-386.git
 cd frank-386
 
-# Build with default settings (M1 board, 378MHz, PS/2 keyboard)
+# Build with default settings (M2 board, 378MHz, PS/2 keyboard)
 ./build.sh
 
-# Build for M2 board
-./build.sh -M2
+# Build for M1 board
+./build.sh -M1
 
 # Build with USB keyboard support
 ./build.sh --usb-hid
-
-# Build for Murmulator OS
-./build.sh --mos2
 
 # Custom build
 ./build.sh -b M1 -c 504 -p 166 --debug
@@ -206,12 +211,12 @@ cd frank-386
 
 | Option | Description |
 |--------|-------------|
-| `-b, --board <M1\|M2>` | Board variant (default: M1) |
+| `-b, --board <M1\|M2>` | Board variant (default: M2) |
 | `-c, --cpu <MHz>` | CPU speed: 378 (default), 504 |
 | `-p, --psram <MHz>` | PSRAM speed: 133 (default), 166 |
 | `--usb-hid` | Enable USB keyboard (disables USB serial) |
+| `--hdmi` | Force HDMI output |
 | `--debug` | Enable debug output |
-| `--mos2` | Build for Murmulator OS (m1p2/m2p2 format) |
 | `-clean` | Clean build directory first |
 
 ### Build Options (CMake)
@@ -219,27 +224,31 @@ cd frank-386
 | Option | Description |
 |--------|-------------|
 | `-DPICO_BOARD=pico2` | Build for RP2350 (default) |
-| `-DBOARD=M1` | Use M1 GPIO layout (default) |
-| `-DBOARD=M2` | Use M2 GPIO layout |
+| `-DBOARD=M1` | Use M1 GPIO layout |
+| `-DBOARD=M2` | Use M2 GPIO layout (default) |
+| `-DBOARD=PC` | Use Olimex PICO-PC layout |
+| `-DBOARD=Z2` | Use Waveshare RP2350-PiZero layout |
 | `-DCPU_SPEED=378` | CPU clock in MHz (378, 504) |
 | `-DPSRAM_SPEED=133` | PSRAM clock in MHz (133, 166) |
 | `-DUSB_HID_ENABLED=ON` | Enable USB keyboard (disables USB serial) |
 | `-DDEBUG_ENABLED=ON` | Enable verbose debug logging |
-| `-DMOS2=ON` | Build for Murmulator OS |
+| `-DFORCE_HDMI=ON` | Force HDMI output |
 
 ### Release Builds
 
 To build all firmware variants:
 
 ```bash
+# Interactive (prompts for version)
 ./release.sh
+
+# With version number
+./release.sh 1.02
 ```
 
 This creates firmware files in the `release/` directory:
-- `frank-386_m1_*.uf2` - M1 board, standard UF2 format
-- `frank-386_m2_*.uf2` - M2 board, standard UF2 format
-- `frank-386_m1_*.m1p2` - M1 board, Murmulator OS 2 format
-- `frank-386_m2_*.m2p2` - M2 board, Murmulator OS 2 format
+- `frank-386_m1_<version>.uf2` - M1 board, standard UF2 format
+- `frank-386_m2_<version>.uf2` - M2 board, standard UF2 format
 
 ### Flashing
 
@@ -259,7 +268,7 @@ Use `setup /im` to bypass memory check.
 ### "Protection error" during Windows 95 startup
 Use [patcher9x](https://github.com/JHRobotics/patcher9x).
 
-### Enable mapdrivde.com support (redirector) to map SD-card to network-attached-drive H
+### Enable mapdrive.com support (redirector) to map SD-card to network-attached-drive H
 Set `redirector = 1` in config.ini.
 
 ### No keyboard input

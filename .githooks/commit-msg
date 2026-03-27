@@ -1,0 +1,9 @@
+#!/bin/sh
+# Reject commits containing AI-generated traces
+MSG_FILE="$1"
+
+if grep -q -i -E "co-authored-by.*(claude|anthropic|openai|copilot|gpt)|generated with.*(claude|ai|copilot)" "$MSG_FILE"; then
+    echo "ERROR: Commit message contains AI traces."
+    echo "Remove Co-Authored-By / Generated-with lines before committing."
+    exit 1
+fi

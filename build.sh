@@ -5,7 +5,6 @@
 #   -b, --board      Board variant: M1 or M2 (default: M2)
 #   -p, --psram      PSRAM speed in MHz (default: 133)
 #   -c, --cpu        CPU speed in MHz: 378 (default), 504
-#   --mos2           Build for Murmulator OS (m1p2/m2p2 format)
 #   --usb-hid        Enable USB HID keyboard (disables USB CDC)
 #   --debug          Enable debug output
 #   -clean           Clean build directory first
@@ -19,7 +18,6 @@
 BOARD="M2"
 PSRAM="133"
 CPU="378"
-MOS2="OFF"
 USB_HID="OFF"
 HDMI="OFF"
 DEBUG="ON"
@@ -59,10 +57,6 @@ while [[ $# -gt 0 ]]; do
             PSRAM="166"
             shift
             ;;
-        --mos2)
-            MOS2="ON"
-            shift
-            ;;
         --usb-hid)
             USB_HID="ON"
             shift
@@ -84,7 +78,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -h|--help)
-            head -16 "$0" | tail -14
+            head -15 "$0" | tail -13
             exit 0
             ;;
         *)
@@ -106,10 +100,6 @@ if [[ "$DEBUG" == "ON" ]]; then
     CMAKE_ARGS="$CMAKE_ARGS -DDEBUG_ENABLED=ON"
 fi
 
-if [[ "$MOS2" == "ON" ]]; then
-    CMAKE_ARGS="$CMAKE_ARGS -DMOS2=ON"
-fi
-
 if [[ "$PROFILE" == "ON" ]]; then
     CMAKE_ARGS="$CMAKE_ARGS -DPROFILE_ENABLED=ON"
 fi
@@ -122,7 +112,6 @@ echo "Building frank-386:"
 echo "  Board: $BOARD"
 echo "  CPU: $CPU MHz"
 echo "  PSRAM: $PSRAM MHz"
-echo "  MOS2: $MOS2"
 echo "  USB HID: $USB_HID"
 echo "  HDMI: $HDMI"
 echo "  Debug: $DEBUG"
