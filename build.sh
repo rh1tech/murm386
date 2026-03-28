@@ -3,6 +3,7 @@
 #
 # Usage: ./build.sh [OPTIONS]
 #   -b, --board      Board variant: M1, M2, PC, Z2 (default: M2)
+#   -a, --audio      Audio output: I2S, PWM (default: PWM; PC is always PWM)
 #   -p, --psram      PSRAM speed in MHz (default: 133)
 #   -c, --cpu        CPU speed in MHz: 378 (default), 504
 #   --usb-hid        Enable USB HID keyboard (disables USB CDC)
@@ -13,9 +14,11 @@
 # Short options:
 #   -M1, -M2, -PC, -Z2   Board variant
 #   -378, -504            CPU speed in MHz
+#   -i2s, -pwm            Audio output type
 
 # Defaults (378/133 for stable overclocked operation)
 BOARD="M2"
+AUDIO="PWM"
 PSRAM="133"
 CPU="378"
 USB_HID="OFF"
@@ -45,6 +48,18 @@ while [[ $# -gt 0 ]]; do
             ;;
         -Z2)
             BOARD="Z2"
+            shift
+            ;;
+        -a|--audio)
+            AUDIO=$(echo "$2" | tr '[:lower:]' '[:upper:]')
+            shift 2
+            ;;
+        -i2s)
+            AUDIO="I2S"
+            shift
+            ;;
+        -pwm)
+            AUDIO="PWM"
             shift
             ;;
         -p|--psram)
@@ -96,11 +111,18 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Olimex PC has no I2S hardware - force PWM
+if [[ "$BOARD" == "PC" && "$AUDIO" != "PWM" ]]; then
+    echo "Warning: Olimex PC does not support I2S, forcing PWM audio"
+    AUDIO="PWM"
+fi
+
 # Build cmake arguments
 CMAKE_ARGS="-DPICO_BOARD=pico2 -DCMAKE_BUILD_TYPE=MinSizeRel"
 CMAKE_ARGS="$CMAKE_ARGS -DBOARD=${BOARD}"
 CMAKE_ARGS="$CMAKE_ARGS -DCPU_SPEED=$CPU"
 CMAKE_ARGS="$CMAKE_ARGS -DPSRAM_SPEED=$PSRAM"
+CMAKE_ARGS="$CMAKE_ARGS -DAUDIO_TYPE=$AUDIO"
 
 CMAKE_ARGS="$CMAKE_ARGS -DUSB_HID_ENABLED=$USB_HID"
 
@@ -118,6 +140,7 @@ fi
 
 echo "Building frank-386:"
 echo "  Board: $BOARD"
+echo "  Audio: $AUDIO"
 echo "  CPU: $CPU MHz"
 echo "  PSRAM: $PSRAM MHz"
 echo "  USB HID: $USB_HID"

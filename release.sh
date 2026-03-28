@@ -3,10 +3,11 @@
 #
 # release.sh - Build all release variants of frank-386
 #
-# Creates firmware files for each board variant (M1, M2):
+# Creates firmware files for each board variant (M1, M2, PC, Z2):
 #   - UF2 format for direct flashing
+#   - I2S and PWM audio variants (PC is PWM only)
 #
-# Output format: frank-386_<board>_<version>.uf2
+# Output format: frank-386_<board>_<audio>_<version>.uf2
 #
 # Release configuration:
 #   - CPU: 378 MHz (stable overclock)
@@ -98,11 +99,12 @@ mkdir -p "$RELEASE_DIR"
 
 # Configuration
 BOARDS=("M1" "M2" "PC" "Z2")
+AUDIO_TYPES=("I2S" "PWM")
 CPU_SPEED="378"    # Stable overclock for releases
 PSRAM_SPEED="133"  # Stable PSRAM speed for releases
 
-# Count total builds: 4 boards
-TOTAL_BUILDS=4
+# Count total builds: M1/M2/Z2 get I2S+PWM (6), PC gets PWM only (1) = 7
+TOTAL_BUILDS=7
 BUILD_COUNT=0
 
 echo ""
@@ -112,17 +114,19 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 # Function to build a single variant
 build_variant() {
     local BOARD=$1
+    local AUDIO=$2
 
     BUILD_COUNT=$((BUILD_COUNT + 1))
 
     # Determine board number for filename
     local BOARD_LC=$(echo "$BOARD" | tr '[:upper:]' '[:lower:]')
+    local AUDIO_LC=$(echo "$AUDIO" | tr '[:upper:]' '[:lower:]')
 
-    local OUTPUT_NAME="frank-386_${BOARD_LC}_${VERSION}.uf2"
+    local OUTPUT_NAME="frank-386_${BOARD_LC}_${AUDIO_LC}_${VERSION}.uf2"
 
     echo ""
     echo -e "${CYAN}[$BUILD_COUNT/$TOTAL_BUILDS] Building: $OUTPUT_NAME${NC}"
-    echo -e "  Board: $BOARD | CPU: ${CPU_SPEED}MHz | PSRAM: ${PSRAM_SPEED}MHz"
+    echo -e "  Board: $BOARD | Audio: $AUDIO | CPU: ${CPU_SPEED}MHz | PSRAM: ${PSRAM_SPEED}MHz"
 
     # Clean and create build directory
     rm -rf build
@@ -132,6 +136,7 @@ build_variant() {
     # Build cmake arguments - release configuration
     local CMAKE_ARGS="-DPICO_BOARD=pico2"
     CMAKE_ARGS="$CMAKE_ARGS -DBOARD=$BOARD"
+    CMAKE_ARGS="$CMAKE_ARGS -DAUDIO_TYPE=$AUDIO"
     CMAKE_ARGS="$CMAKE_ARGS -DCPU_SPEED=$CPU_SPEED"
     CMAKE_ARGS="$CMAKE_ARGS -DPSRAM_SPEED=$PSRAM_SPEED"
     CMAKE_ARGS="$CMAKE_ARGS -DUSB_HID_ENABLED=ON"      # Enable USB keyboard for releases
@@ -169,7 +174,13 @@ echo ""
 echo -e "${CYAN}=== Building RP2350 UF2 firmware ===${NC}"
 
 for BOARD in "${BOARDS[@]}"; do
-    build_variant "$BOARD"
+    for AUDIO in "${AUDIO_TYPES[@]}"; do
+        # Olimex PC has no I2S hardware - PWM only
+        if [[ "$BOARD" == "PC" && "$AUDIO" == "I2S" ]]; then
+            continue
+        fi
+        build_variant "$BOARD" "$AUDIO"
+    done
 done
 
 # ============================================================================
@@ -183,6 +194,6 @@ echo -e "${GREEN}Release build complete!${NC}"
 echo ""
 echo "Release files in: $RELEASE_DIR/"
 echo ""
-ls -la "$RELEASE_DIR"/frank-386_*_${VERSION}.uf2 2>/dev/null | awk '{print "  " $9 " (" $5 " bytes)"}'
+ls -la "$RELEASE_DIR"/frank-386_*_*_${VERSION}.uf2 2>/dev/null | awk '{print "  " $9 " (" $5 " bytes)"}'
 echo ""
 echo -e "Version: ${CYAN}${MAJOR}.$(printf '%02d' $MINOR)${NC}"
